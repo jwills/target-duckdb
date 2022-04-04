@@ -25,7 +25,7 @@ setup(name="target-duckdb",
       extras_require={
           "test": [
               'pytest==6.2.1',
-              'pylint==2.6.0',
+              'pylint==2.13.4',
               'pytest-cov==2.10.1',
           ]
       },
