@@ -18,15 +18,15 @@ setup(name="target-duckdb",
       ],
       py_modules=["target_duckdb"],
       install_requires=[
-          'pipelinewise-singer-python==1.*',
+          'pipelinewise-singer-python>=1,<3',
           'duckdb==0.3.2',
-          'inflection==0.3.1',
+          'inflection==0.5.1',
       ],
       extras_require={
           "test": [
-              'pytest==6.2.1',
-              'pylint==2.6.0',
-              'pytest-cov==2.10.1',
+              'pytest==7.1.1',
+              'pylint==2.13.4',
+              'pytest-cov==3.0.0',
           ]
       },
       entry_points="""
