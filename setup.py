@@ -18,7 +18,7 @@ setup(name="target-duckdb",
       ],
       py_modules=["target_duckdb"],
       install_requires=[
-          'pipelinewise-singer-python==1.*',
+          'pipelinewise-singer-python>=1,<3',
           'duckdb==0.3.2',
           'inflection==0.3.1',
       ],
