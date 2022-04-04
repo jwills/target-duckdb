@@ -5,20 +5,20 @@ import tempfile
 
 from unittest.mock import patch
 
-import target_postgres
+import target_duckdb
 
 
 def _mock_record_to_csv_line(record):
     return record
 
 
-class TestTargetPostgres(unittest.TestCase):
+class TestTargetDuckDB(unittest.TestCase):
 
     def setUp(self):
         self.config = {}
 
-    @patch('target_postgres.flush_streams')
-    @patch('target_postgres.DbSync')
+    @patch('target_duckdb.flush_streams')
+    @patch('target_duckdb.DbSync')
     def test_persist_lines_with_40_records_and_batch_size_of_20_expect_flushing_once(self,
                                                                                      dbsync_mock,
                                                                                      flush_streams_mock):
@@ -34,6 +34,6 @@ class TestTargetPostgres(unittest.TestCase):
 
         flush_streams_mock.return_value = '{"currently_syncing": null}'
 
-        target_postgres.persist_lines(self.config, lines)
+        target_duckdb.persist_lines(self.config, lines)
 
         flush_streams_mock.assert_called_once()

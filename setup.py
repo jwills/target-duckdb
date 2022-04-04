@@ -5,23 +5,22 @@ from setuptools import setup
 with open('README.md') as f:
     long_description = f.read()
 
-setup(name="pipelinewise-target-postgres",
-      version="2.1.1",
-      description="Singer.io target for loading data to PostgreSQL - PipelineWise compatible",
+setup(name="target-duckdb",
+      version="0.1.0",
+      description="Singer.io target for loading data to DuckDB",
       long_description=long_description,
       long_description_content_type='text/markdown',
       author="TransferWise",
-      url='https://github.com/transferwise/pipelinewise-target-postgres',
+      url='https://github.com/jwills/target-duckdb',
       classifiers=[
           'License :: OSI Approved :: Apache Software License',
           'Programming Language :: Python :: 3 :: Only'
       ],
-      py_modules=["target_postgres"],
+      py_modules=["target_duckdb"],
       install_requires=[
           'pipelinewise-singer-python==1.*',
-          'psycopg2-binary==2.8.5',
+          'duckdb==0.3.2',
           'inflection==0.3.1',
-          'joblib==0.16.0'
       ],
       extras_require={
           "test": [
@@ -32,9 +31,9 @@ setup(name="pipelinewise-target-postgres",
       },
       entry_points="""
           [console_scripts]
-          target-postgres=target_postgres:main
+          target-duckdb=target_duckdb:main
       """,
-      packages=["target_postgres"],
+      packages=["target_duckdb"],
       package_data={},
       include_package_data=True,
       )

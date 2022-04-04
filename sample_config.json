@@ -1,0 +1,4 @@
+{
+  "filepath": "/tmp/singer_target.duckdb",
+  "default_target_schema": "main"
+}

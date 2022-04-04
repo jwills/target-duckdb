@@ -9,15 +9,11 @@ def get_db_config():
     # Default configuration settings for integration tests.
     # --------------------------------------------------------------------------
     # The following values needs to be defined in environment variables with
-    # valid details to a Postgres instace
+    # valid details to a local DuckDB file
     # --------------------------------------------------------------------------
-    # Postgres instance
-    config['host'] = os.environ.get('TARGET_POSTGRES_HOST')
-    config['port'] = os.environ.get('TARGET_POSTGRES_PORT')
-    config['user'] = os.environ.get('TARGET_POSTGRES_USER')
-    config['password'] = os.environ.get('TARGET_POSTGRES_PASSWORD')
-    config['dbname'] = os.environ.get('TARGET_POSTGRES_DBNAME')
-    config['default_target_schema'] = os.environ.get("TARGET_POSTGRES_SCHEMA")
+    # DuckDB file path/schema
+    config['filepath'] = '/tmp/integration_test.duckdb'
+    config['default_target_schema'] = 'integration_test'
 
 
     # --------------------------------------------------------------------------

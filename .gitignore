@@ -2,7 +2,6 @@
 .vscode
 .idea/*
 
-
 # Python
 __pycache__/
 *.py[cod]
@@ -13,6 +12,7 @@ virtualenvs/
 *__pycache__/
 *~
 dist/
+build/
 
 # Singer JSON files
 properties.json
@@ -27,6 +27,7 @@ blog_old.md
 node_modules
 *.pyc
 tmp
+.coverage
 
 # Docs
 docs/_build/

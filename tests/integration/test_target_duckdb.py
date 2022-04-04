@@ -2,13 +2,12 @@ import unittest
 import os
 import json
 import datetime
-import target_postgres
+import target_duckdb
 
 from unittest import mock
 
-from target_postgres import RecordValidationException
-from target_postgres.db_sync import DbSync
-from psycopg2.errors import InvalidTextRepresentation
+from target_duckdb import RecordValidationException
+from target_duckdb.db_sync import DbSync
 
 try:
     import tests.utils as test_utils
@@ -32,9 +31,9 @@ class TestIntegration(unittest.TestCase):
         cls.config = test_utils.get_test_config()
         print(cls.config)
         cls.maxDiff = None
-        postgres = DbSync(cls.config)
+        duckdb = DbSync(cls.config)
         if cls.config['default_target_schema']:
-            postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(cls.config['default_target_schema']))
+            duckdb.query("DROP SCHEMA IF EXISTS {} CASCADE".format(cls.config['default_target_schema']))
 
     @staticmethod
     def remove_metadata_columns_from_rows(rows):
@@ -64,14 +63,14 @@ class TestIntegration(unittest.TestCase):
             for md_c in METADATA_COLUMNS:
                 self.assertFalse(md_c in r)
 
-    def assert_multiple_streams_are_into_postgres(self, should_metadata_columns_exist=False,
+    def assert_multiple_streams_are_into_duckdb(self, should_metadata_columns_exist=False,
                                                   should_hard_deleted_rows=False):
         """
         This is a helper assertion that checks if every data from the message-with-multiple-streams.json
-        file is available in Postgres tables correctly.
+        file is available in DuckDB tables correctly.
         Useful to check different loading methods without duplicating assertions
         """
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         default_target_schema = self.config.get('default_target_schema', '')
         schema_mapping = self.config.get('schema_mapping', {})
 
@@ -79,14 +78,12 @@ class TestIntegration(unittest.TestCase):
         target_schema = None
         if default_target_schema is not None and default_target_schema.strip():
             target_schema = default_target_schema
-        elif schema_mapping:
-            target_schema = os.environ.get("TARGET_POSTGRES_SCHEMA")
 
         # Get loaded rows from tables
-        table_one = postgres.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
-        table_two = postgres.query("SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema))
-        table_three = postgres.query("SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema))
-        table_four = postgres.query("SELECT * FROM {}.test_table_four ORDER BY c_pk".format(target_schema))
+        table_one = duckdb.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
+        table_two = duckdb.query("SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema))
+        table_three = duckdb.query("SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema))
+        table_four = duckdb.query("SELECT * FROM {}.test_table_four ORDER BY c_pk".format(target_schema))
 
         # ----------------------------------------------------------------------
         # Check rows in table_one
@@ -167,14 +164,14 @@ class TestIntegration(unittest.TestCase):
             self.assert_metadata_columns_not_exist(table_three)
             self.assert_metadata_columns_not_exist(table_four)
 
-    def assert_logical_streams_are_in_postgres(self, should_metadata_columns_exist=False):
+    def assert_logical_streams_are_in_duckdb(self, should_metadata_columns_exist=False):
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_one = postgres.query("SELECT * FROM {}.logical1_table1 ORDER BY cid".format(target_schema))
-        table_two = postgres.query("SELECT * FROM {}.logical1_table2 ORDER BY cid".format(target_schema))
-        table_three = postgres.query("SELECT * FROM {}.logical2_table1 ORDER BY cid".format(target_schema))
-        table_four = postgres.query("SELECT cid, ctimentz, ctimetz FROM {}.logical1_edgydata WHERE CID IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(target_schema))
+        table_one = duckdb.query("SELECT * FROM {}.logical1_table1 ORDER BY cid".format(target_schema))
+        table_two = duckdb.query("SELECT * FROM {}.logical1_table2 ORDER BY cid".format(target_schema))
+        table_three = duckdb.query("SELECT * FROM {}.logical2_table1 ORDER BY cid".format(target_schema))
+        table_four = duckdb.query("SELECT cid, ctimentz, ctimetz FROM {}.logical1_edgydata WHERE CID IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(target_schema))
 
         # ----------------------------------------------------------------------
         # Check rows in table_one
@@ -241,26 +238,26 @@ class TestIntegration(unittest.TestCase):
         assert self.remove_metadata_columns_from_rows(table_three) == expected_table_three
         assert self.remove_metadata_columns_from_rows(table_four) == expected_table_four
 
-    def assert_logical_streams_are_in_postgres_and_are_empty(self):
+    def assert_logical_streams_are_in_duckdb_and_are_empty(self):
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_one = postgres.query("SELECT * FROM {}.logical1_table1 ORDER BY CID".format(target_schema))
-        table_two = postgres.query("SELECT * FROM {}.logical1_table2 ORDER BY CID".format(target_schema))
-        table_three = postgres.query("SELECT * FROM {}.logical2_table1 ORDER BY CID".format(target_schema))
-        table_four = postgres.query("SELECT * FROM {}.logical1_edgydata WHERE cid IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(target_schema))
+        table_one = duckdb.query("SELECT * FROM {}.logical1_table1 ORDER BY CID".format(target_schema))
+        table_two = duckdb.query("SELECT * FROM {}.logical1_table2 ORDER BY CID".format(target_schema))
+        table_three = duckdb.query("SELECT * FROM {}.logical2_table1 ORDER BY CID".format(target_schema))
+        table_four = duckdb.query("SELECT * FROM {}.logical1_edgydata WHERE cid IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(target_schema))
 
         self.assertEqual(table_one, [])
         self.assertEqual(table_two, [])
         self.assertEqual(table_three, [])
         self.assertEqual(table_four, [])
 
-    def assert_binary_data_is_in_postgres(self, table_name, should_metadata_columns_exist=False):
+    def assert_binary_data_is_in_duckdb(self, table_name, should_metadata_columns_exist=False):
         # Redshift doesn't have binary type. Binary formatted singer values loaded into VARCHAR columns
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_one = postgres.query('SELECT * FROM {}.{} ORDER BY "new"'.format(target_schema, table_name))
+        table_one = duckdb.query('SELECT * FROM {}.{} ORDER BY "new"'.format(target_schema, table_name))
 
         # ----------------------------------------------------------------------
         # Check rows in table_one
@@ -279,20 +276,20 @@ class TestIntegration(unittest.TestCase):
         """Receiving invalid JSONs should raise an exception"""
         tap_lines = test_utils.get_test_tap_lines('invalid-json.json')
         with self.assertRaises(json.decoder.JSONDecodeError):
-            target_postgres.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.config, tap_lines)
 
     def test_message_order(self):
         """RECORD message without a previously received SCHEMA message should raise an exception"""
         tap_lines = test_utils.get_test_tap_lines('invalid-message-order.json')
         with self.assertRaises(Exception):
-            target_postgres.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.config, tap_lines)
 
     def test_loading_tables(self):
         """Loading multiple tables from the same input tap with various columns types"""
         tap_lines = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_multiple_streams_are_into_postgres()
+        self.assert_multiple_streams_are_into_duckdb()
 
     def test_loading_tables_with_metadata_columns(self):
         """Loading multiple tables from the same input tap with various columns types"""
@@ -300,10 +297,10 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on adding metadata columns
         self.config['add_metadata_columns'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
-        self.assert_multiple_streams_are_into_postgres(should_metadata_columns_exist=True)
+        self.assert_multiple_streams_are_into_duckdb(should_metadata_columns_exist=True)
 
     def test_loading_tables_with_defined_parallelism(self):
         """Loading multiple tables from the same input tap with various columns types"""
@@ -311,9 +308,9 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on adding metadata columns
         self.config['parallelism'] = 1
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_multiple_streams_are_into_postgres()
+        self.assert_multiple_streams_are_into_duckdb()
 
     def test_loading_tables_with_hard_delete(self):
         """Loading multiple tables from the same input tap with deleted rows"""
@@ -321,10 +318,10 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
-        self.assert_multiple_streams_are_into_postgres(
+        self.assert_multiple_streams_are_into_duckdb(
             should_metadata_columns_exist=True,
             should_hard_deleted_rows=True
         )
@@ -334,10 +331,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
 
         # Load with default settings
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly
-        self.assert_multiple_streams_are_into_postgres(
+        self.assert_multiple_streams_are_into_duckdb(
             should_metadata_columns_exist=False,
             should_hard_deleted_rows=False
         )
@@ -348,10 +345,10 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
-        self.assert_binary_data_is_in_postgres(
+        self.assert_binary_data_is_in_duckdb(
             table_name='"order"',
             should_metadata_columns_exist=True
         )
@@ -362,10 +359,10 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
-        self.assert_binary_data_is_in_postgres(
+        self.assert_binary_data_is_in_duckdb(
             table_name='"table with space and uppercase"',
             should_metadata_columns_exist=True
         )
@@ -375,12 +372,12 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-unicode-characters.json')
 
         # Load with default settings
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_unicode = postgres.query("SELECT * FROM {}.test_table_unicode ORDER BY c_pk".format(target_schema))
+        table_unicode = duckdb.query("SELECT * FROM {}.test_table_unicode ORDER BY c_pk".format(target_schema))
 
         self.assertEqual(
             self.remove_metadata_columns_from_rows(table_unicode),
@@ -399,12 +396,12 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-long-texts.json')
 
         # Load with default settings
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_long_texts = postgres.query("SELECT * FROM {}.test_table_long_texts ORDER BY c_pk".format(target_schema))
+        table_long_texts = duckdb.query("SELECT * FROM {}.test_table_long_texts ORDER BY c_pk".format(target_schema))
 
         # Test not very long texts by exact match
         self.assertEqual(
@@ -438,12 +435,12 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-non-db-friendly-columns.json')
 
         # Load with default settings
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_non_db_friendly_columns = postgres.query(
+        table_non_db_friendly_columns = duckdb.query(
             "SELECT * FROM {}.test_table_non_db_friendly_columns ORDER BY c_pk".format(target_schema))
 
         self.assertEqual(
@@ -461,12 +458,12 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-nested-schema.json')
 
         # Load with default settings - Flattening disabled
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Get loaded rows from tables - Transform JSON to string at query time
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        unflattened_table = postgres.query(
+        unflattened_table = duckdb.query(
             """SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk""".format(target_schema))
 
         # Should be valid nested JSON strings
@@ -490,12 +487,12 @@ class TestIntegration(unittest.TestCase):
         self.config['data_flattening_max_level'] = 10
 
         # Load with default settings - Flattening enabled
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        flattened_table = postgres.query(
+        flattened_table = duckdb.query(
             "SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk".format(target_schema))
 
         # Should be flattened columns
@@ -514,24 +511,24 @@ class TestIntegration(unittest.TestCase):
             }])
 
     def test_column_name_change(self):
-        """Tests correct renaming of postgres columns after source change"""
+        """Tests correct renaming of duckdb columns after source change"""
         tap_lines_before_column_name_change = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
         tap_lines_after_column_name_change = test_utils.get_test_tap_lines(
             'messages-with-multiple-streams-modified-column.json')
 
         # Load with default settings
-        target_postgres.persist_lines(self.config, tap_lines_before_column_name_change)
-        target_postgres.persist_lines(self.config, tap_lines_after_column_name_change)
+        target_duckdb.persist_lines(self.config, tap_lines_before_column_name_change)
+        target_duckdb.persist_lines(self.config, tap_lines_after_column_name_change)
 
         # Get loaded rows from tables
-        postgres = DbSync(self.config)
+        duckdb = DbSync(self.config)
         target_schema = self.config.get('default_target_schema', '')
-        table_one = postgres.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
-        table_two = postgres.query("SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema))
-        table_three = postgres.query("SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema))
+        table_one = duckdb.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
+        table_two = duckdb.query("SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema))
+        table_three = duckdb.query("SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema))
 
         # Get the previous column name from information schema in test_table_two
-        previous_column_name = postgres.query("""
+        previous_column_name = duckdb.query("""
             SELECT column_name
               FROM information_schema.columns
              WHERE table_catalog = '{}'
@@ -583,70 +580,20 @@ class TestIntegration(unittest.TestCase):
         # ... and define a custom stream to schema mapping
         self.config['schema_mapping'] = {
             "tap_mysql_test": {
-                "target_schema": os.environ.get("TARGET_POSTGRES_SCHEMA"),
+                "target_schema": "integration_test",
                 "indices": {
                     "test_table_one": ["c_varchar"],
                     "test_table_two": ["c_varchar", "c_int"]
                 }
             }
         }
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
-        self.assert_multiple_streams_are_into_postgres(
+        self.assert_multiple_streams_are_into_duckdb(
             should_metadata_columns_exist=True,
             should_hard_deleted_rows=True
         )
-
-    def test_grant_privileges(self):
-        """Tests GRANT USAGE and SELECT privileges on newly created tables"""
-        tap_lines = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
-
-        # Create test users and groups
-        postgres = DbSync(self.config)
-        postgres.query("DROP USER IF EXISTS user_1")
-        postgres.query("DROP USER IF EXISTS user_2")
-        try:
-            postgres.query("DROP GROUP group_1")  # DROP GROUP has no IF EXISTS
-        except:
-            pass
-        try:
-            postgres.query("DROP GROUP group_2")
-        except:
-            pass
-        postgres.query("CREATE USER user_1 WITH PASSWORD 'Abcdefgh1234'")
-        postgres.query("CREATE USER user_2 WITH PASSWORD 'Abcdefgh1234'")
-        postgres.query("CREATE GROUP group_1 WITH USER user_1, user_2")
-        postgres.query("CREATE GROUP group_2 WITH USER user_2")
-
-        # When grantees is a string then privileges should be granted to single user
-        postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(self.config['default_target_schema']))
-        self.config['default_target_schema_select_permissions'] = 'group_1'
-        target_postgres.persist_lines(self.config, tap_lines)
-
-        # When grantees is a list then privileges should be granted to list of user
-        postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(self.config['default_target_schema']))
-        self.config['default_target_schema_select_permissions'] = ['group_1', 'group_2']
-        target_postgres.persist_lines(self.config, tap_lines)
-
-        # Grant privileges as dict should pass but should be ignored - Dict not supported for target-postgres
-        postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(self.config['default_target_schema']))
-        self.config['default_target_schema_select_permissions'] = {
-            'users': ['user_1', 'user_2'],
-            'groups': ['group_1', 'group_2']}
-        target_postgres.persist_lines(self.config, tap_lines)
-
-        # Granting not existing group should raise exception
-        postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(self.config['default_target_schema']))
-        with self.assertRaises(Exception):
-            self.config['default_target_schema_select_permissions'] = 'group_not_exists_1'
-            target_postgres.persist_lines(self.config, tap_lines)
-
-        # Granting not existing list of groups should raise exception
-        postgres.query("DROP SCHEMA IF EXISTS {} CASCADE".format(self.config['default_target_schema']))
-        with self.assertRaises(Exception):
-            self.config['default_target_schema_select_permissions'] = ['group_not_exists_1', 'group_not_exists_2']
-            target_postgres.persist_lines(self.config, tap_lines)
 
     def test_logical_streams_from_pg_with_hard_delete_and_default_batch_size_should_pass(self):
         """Tests logical streams from pg with inserts, updates and deletes"""
@@ -654,9 +601,9 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_logical_streams_are_in_postgres(True)
+        self.assert_logical_streams_are_in_duckdb(True)
 
     def test_logical_streams_from_pg_with_hard_delete_and_batch_size_of_5_should_pass(self):
         """Tests logical streams from pg with inserts, updates and deletes"""
@@ -665,9 +612,9 @@ class TestIntegration(unittest.TestCase):
         # Turning on hard delete mode
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 5
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_logical_streams_are_in_postgres(True)
+        self.assert_logical_streams_are_in_duckdb(True)
 
     def test_logical_streams_from_pg_with_hard_delete_and_batch_size_of_5_and_no_records_should_pass(self):
         """Tests logical streams from pg with inserts, updates and deletes"""
@@ -676,11 +623,11 @@ class TestIntegration(unittest.TestCase):
         # Turning on hard delete mode
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 5
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_logical_streams_are_in_postgres_and_are_empty()
+        self.assert_logical_streams_are_in_duckdb_and_are_empty()
 
-    @mock.patch('target_postgres.emit_state')
+    @mock.patch('target_duckdb.emit_state')
     def test_flush_streams_with_no_intermediate_flushes(self, mock_emit_state):
         """Test emitting states when no intermediate flush required"""
         mock_emit_state.get.return_value = None
@@ -689,7 +636,7 @@ class TestIntegration(unittest.TestCase):
         # Set batch size big enough to never has to flush in the middle
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 1000
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # State should be emitted only once with the latest received STATE message
         self.assertEqual(
@@ -706,9 +653,9 @@ class TestIntegration(unittest.TestCase):
             ])
 
         # Every table should be loaded correctly
-        self.assert_logical_streams_are_in_postgres(True)
+        self.assert_logical_streams_are_in_duckdb(True)
 
-    @mock.patch('target_postgres.emit_state')
+    @mock.patch('target_duckdb.emit_state')
     def test_flush_streams_with_intermediate_flushes(self, mock_emit_state):
         """Test emitting states when intermediate flushes required"""
         mock_emit_state.get.return_value = None
@@ -717,7 +664,7 @@ class TestIntegration(unittest.TestCase):
         # Set batch size small enough to trigger multiple stream flushes
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 10
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # State should be emitted multiple times, updating the positions only in the stream which got flushed
         self.assertEqual(
@@ -780,9 +727,9 @@ class TestIntegration(unittest.TestCase):
             ])
 
         # Every table should be loaded correctly
-        self.assert_logical_streams_are_in_postgres(True)
+        self.assert_logical_streams_are_in_duckdb(True)
 
-    @mock.patch('target_postgres.emit_state')
+    @mock.patch('target_duckdb.emit_state')
     def test_flush_streams_with_intermediate_flushes_on_all_streams(self, mock_emit_state):
         """Test emitting states when intermediate flushes required and flush_all_streams is enabled"""
         mock_emit_state.get.return_value = None
@@ -792,7 +739,7 @@ class TestIntegration(unittest.TestCase):
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 10
         self.config['flush_all_streams'] = True
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
         # State should be emitted 6 times, flushing every stream and updating every stream position
         self.assertEqual(
@@ -855,7 +802,7 @@ class TestIntegration(unittest.TestCase):
             ])
 
         # Every table should be loaded correctly
-        self.assert_logical_streams_are_in_postgres(True)
+        self.assert_logical_streams_are_in_duckdb(True)
 
     def test_record_validation(self):
         """Test validating records"""
@@ -865,12 +812,12 @@ class TestIntegration(unittest.TestCase):
         self.config['validate_records'] = True
 
         with self.assertRaises(RecordValidationException):
-            target_postgres.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.config, tap_lines)
 
         # Loading invalid records when record validation disabled should fail at load time
         self.config['validate_records'] = False
-        with self.assertRaises(InvalidTextRepresentation):
-            target_postgres.persist_lines(self.config, tap_lines)
+        with self.assertRaises(Exception):
+            target_duckdb.persist_lines(self.config, tap_lines)
 
     def test_loading_tables_with_custom_temp_dir(self):
         """Loading multiple tables from the same input tap using custom temp directory"""
@@ -878,6 +825,6 @@ class TestIntegration(unittest.TestCase):
 
         # Setting custom temp_dir
         self.config['temp_dir'] = '~/.pipelinewise/tmp'
-        target_postgres.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.config, tap_lines)
 
-        self.assert_multiple_streams_are_into_postgres()
+        self.assert_multiple_streams_are_into_duckdb()

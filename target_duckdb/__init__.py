@@ -10,17 +10,14 @@ from datetime import datetime
 from decimal import Decimal
 from tempfile import mkstemp
 
-from joblib import Parallel, delayed, parallel_backend
 from jsonschema import Draft7Validator, FormatChecker
 from singer import get_logger
 
-from target_postgres.db_sync import DbSync
+from target_duckdb.db_sync import DbSync
 
-LOGGER = get_logger('target_postgres')
+LOGGER = get_logger('target_duckdb')
 
 DEFAULT_BATCH_SIZE_ROWS = 100000
-DEFAULT_PARALLELISM = 0  # 0 The number of threads used to flush tables
-DEFAULT_MAX_PARALLELISM = 16  # Don't use more than this number of threads by default when flushing streams in parallel
 
 
 class RecordValidationException(Exception):
@@ -201,9 +198,7 @@ def persist_lines(config, lines) -> None:
             # Stop loading data by default if no Primary Key.
             #
             # If you want to load tables with no Primary Key:
-            #  1) Set ` 'primary_key_required': false ` in the target-postgres config.json
-            #  or
-            #  2) Use fastsync [postgres-to-postgres, mysql-to-postgres, etc.]
+            #  1) Set ` 'primary_key_required': false ` in the target-duckdb config.json
             if config.get('primary_key_required', True) and len(o['key_properties']) == 0:
                 LOGGER.critical("Primary key is set to mandatory but not defined in the [%s] stream", stream)
                 raise Exception("key_properties field is required")
@@ -255,27 +250,13 @@ def flush_streams(
     Flushes all buckets and resets records count to 0 as well as empties records to load list
     :param streams: dictionary with records to load per stream
     :param row_count: dictionary with row count per stream
-    :param stream_to_sync: Postgres db sync instance per stream
+    :param stream_to_sync: DuckDB db sync instance per stream
     :param config: dictionary containing the configuration
     :param state: dictionary containing the original state from tap
     :param flushed_state: dictionary containing updated states only when streams got flushed
     :param filter_streams: Keys of streams to flush from the streams dict. Default is every stream
     :return: State dict with flushed positions
     """
-    parallelism = config.get("parallelism", DEFAULT_PARALLELISM)
-    max_parallelism = config.get("max_parallelism", DEFAULT_MAX_PARALLELISM)
-
-    # Parallelism 0 means auto parallelism:
-    #
-    # Auto parallelism trying to flush streams efficiently with auto defined number
-    # of threads where the number of threads is the number of streams that need to
-    # be loaded but it's not greater than the value of max_parallelism
-    if parallelism == 0:
-        n_streams_to_flush = len(streams.keys())
-        if n_streams_to_flush > max_parallelism:
-            parallelism = max_parallelism
-        else:
-            parallelism = n_streams_to_flush
 
     # Select the required streams to flush
     if filter_streams:
@@ -283,16 +264,15 @@ def flush_streams(
     else:
         streams_to_flush = streams.keys()
 
-    # Single-host, thread-based parallelism
-    with parallel_backend('threading', n_jobs=parallelism):
-        Parallel()(delayed(load_stream_batch)(
+    for stream in streams_to_flush:
+       load_stream_batch(
             stream=stream,
             records_to_load=streams[stream],
             row_count=row_count,
             db_sync=stream_to_sync[stream],
             delete_rows=config.get('hard_delete'),
             temp_dir=config.get('temp_dir')
-        ) for stream in streams_to_flush)
+       )
 
     # reset flushed stream records to empty to avoid flushing same records
     for stream in streams_to_flush:
@@ -320,7 +300,7 @@ def flush_streams(
 def load_stream_batch(stream, records_to_load, row_count, db_sync, delete_rows=False, temp_dir=None):
     """Load a batch of records and do post load operations, like creating
     or deleting rows"""
-    # Load into Postgres
+    # Load into DuckDB
     if row_count[stream] > 0:
         flush_records(stream, records_to_load, row_count[stream], db_sync, temp_dir)
 

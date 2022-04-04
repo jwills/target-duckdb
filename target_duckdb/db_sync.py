@@ -1,8 +1,7 @@
 import json
 import sys
-import psycopg2
-import psycopg2.extras
-import collections
+import collections.abc
+import duckdb
 import inflection
 import re
 import uuid
@@ -15,11 +14,7 @@ from singer import get_logger
 def validate_config(config):
     errors = []
     required_config_keys = [
-        'host',
-        'port',
-        'user',
-        'password',
-        'dbname'
+        'filepath',
     ]
 
     # Check if mandatory keys exist
@@ -40,22 +35,19 @@ def validate_config(config):
 def column_type(schema_property):
     property_type = schema_property['type']
     property_format = schema_property['format'] if 'format' in schema_property else None
-    col_type = 'character varying'
+    col_type = 'varchar'
     if 'object' in property_type or 'array' in property_type:
-        col_type = 'jsonb'
+        col_type = 'json'
 
-    # Every date-time JSON value is currently mapped to TIMESTAMP WITHOUT TIME ZONE
-    #
-    # TODO: Detect if timezone postfix exists in the JSON and find if TIMESTAMP WITHOUT TIME ZONE or
-    # TIMESTAMP WITH TIME ZONE is the better column type
+    # Every date-time JSON value is currently mapped to TIMESTAMP (no time zone)
     elif property_format == 'date-time':
-        col_type = 'timestamp without time zone'
+        col_type = 'timestamp'
     elif property_format == 'time':
-        col_type = 'time without time zone'
+        col_type = 'time'
     elif 'number' in property_type:
-        col_type = 'double precision'
+        col_type = 'double'
     elif 'integer' in property_type and 'string' in property_type:
-        col_type = 'character varying'
+        col_type = 'varchar'
     elif 'integer' in property_type:
         if 'maximum' in schema_property:
             if schema_property['maximum'] <= 32767:
@@ -65,11 +57,11 @@ def column_type(schema_property):
             elif schema_property['maximum'] <= 9223372036854775807:
                 col_type = 'bigint'
         else:
-            col_type = 'numeric'
+            col_type = 'decimal'
     elif 'boolean' in property_type:
         col_type = 'boolean'
 
-    get_logger('target_postgres').debug("schema_property: %s -> col_type: %s", schema_property, col_type)
+    get_logger('target_duckdb').debug("schema_property: %s -> col_type: %s", schema_property, col_type)
 
     return col_type
 
@@ -147,7 +139,7 @@ def flatten_record(d, flatten_schema=None, parent_key=[], sep='__', level=0, max
     items = []
     for k, v in d.items():
         new_key = flatten_key(k, parent_key, sep)
-        if isinstance(v, collections.MutableMapping) and level < max_level:
+        if isinstance(v, collections.abc.MutableMapping) and level < max_level:
             items.extend(flatten_record(v, flatten_schema, parent_key + [k], sep=sep, level=level + 1,
                                         max_level=max_level).items())
         else:
@@ -185,7 +177,7 @@ def stream_name_to_dict(stream_name, separator='-'):
 class DbSync:
     def __init__(self, connection_config, stream_schema_message=None):
         """
-            connection_config:      Postgres connection details
+            connection_config:      DuckDB connection details
 
             stream_schema_message:  An instance of the DbSync class is typically used to load
                                     data only from a certain singer tap stream.
@@ -194,19 +186,19 @@ class DbSync:
                                     name and the JSON schema that will be used to
                                     validate every RECORDS messages that comes from the stream.
                                     Schema validation happening before creating CSV and before
-                                    uploading data into Postgres.
+                                    loading data into DuckDB.
 
                                     If stream_schema_message is not defined then we can use
                                     the DbSync instance as a generic purpose connection to
-                                    Postgres and can run individual queries. For example
-                                    collecting catalog information from Postgres for caching
+                                    DuckDB and can run individual queries. For example
+                                    collecting catalog information from DuckDB for caching
                                     purposes.
         """
         self.connection_config = connection_config
         self.stream_schema_message = stream_schema_message
 
         # logger to be used across the class's methods
-        self.logger = get_logger('target_postgres')
+        self.logger = get_logger('target_duckdb')
 
         # Validate connection configuration
         config_errors = validate_config(connection_config)
@@ -216,8 +208,9 @@ class DbSync:
             self.logger.error("Invalid configuration:\n   * %s", '\n   * '.join(config_errors))
             sys.exit(1)
 
+        # TODO(jwills): make this richer-- threads, load extensions, etc.
+        self.conn = duckdb.connect(connection_config['filepath'])
         self.schema_name = None
-        self.grantees = None
 
         # Init stream schema
         if stream_schema_message is not None:
@@ -238,8 +231,7 @@ class DbSync:
             #       Example config.json:
             #           "schema_mapping": {
             #               "my_tap_stream_id": {
-            #                   "target_schema": "my_postgres_schema",
-            #                   "target_schema_select_permissions": [ "role_with_select_privs" ],
+            #                   "target_schema": "my_duckdb_schema",
             #                   "indices": ["column_1", "column_2s"]
             #               }
             #           }
@@ -265,58 +257,27 @@ class DbSync:
                                 "nor 'schema_mapping' (object) defines target schema for {} stream."
                                 .format(stream_name))
 
-            #  Define grantees
-            #  ---------------
-            #  Grantees can be defined in multiple ways:
-            #
-            #   1: 'default_target_schema_select_permissions' key  : USAGE and SELECT privileges will be granted on
-            #       every table to a given role for every incoming stream if not specified explicitly in the
-            #       `schema_mapping` object
-            #   2: 'target_schema_select_permissions' key : Roles to grant USAGE and SELECT privileges defined
-            #       explicitly for a given stream.
-            #           Example config.json:
-            #               "schema_mapping": {
-            #                   "my_tap_stream_id": {
-            #                       "target_schema": "my_postgres_schema",
-            #                       "target_schema_select_permissions": [ "role_with_select_privs" ]
-            #                   }
-            #               }
-            self.grantees = self.connection_config.get('default_target_schema_select_permissions')
-            if config_schema_mapping and stream_schema_name in config_schema_mapping:
-                self.grantees = config_schema_mapping[stream_schema_name].get('target_schema_select_permissions',
-                                                                              self.grantees)
-
             self.data_flattening_max_level = self.connection_config.get('data_flattening_max_level', 0)
             self.flatten_schema = flatten_schema(stream_schema_message['schema'],
                                                  max_level=self.data_flattening_max_level)
 
     def open_connection(self):
-        conn_string = "host='{}' dbname='{}' user='{}' password='{}' port='{}'".format(
-            self.connection_config['host'],
-            self.connection_config['dbname'],
-            self.connection_config['user'],
-            self.connection_config['password'],
-            self.connection_config['port']
-        )
-
-        if 'ssl' in self.connection_config and self.connection_config['ssl'] == 'true':
-            conn_string += " sslmode='require'"
-
-        return psycopg2.connect(conn_string)
+        conn_string = self.connection_config['filepath']
+        return duckdb.connect(conn_string)
 
     def query(self, query, params=None):
         self.logger.debug("Running query: %s", query)
-        with self.open_connection() as connection:
-            with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(
-                    query,
-                    params
-                )
+        cur = self.conn
+        if params:
+            cur.execute(query, params)
+        else:
+            cur.execute(query)
 
-                if cur.rowcount > 0:
-                    return cur.fetchall()
-
-                return []
+        cols = [x[0] for x in cur.description]
+        ret = []
+        for row in cur.fetchall():
+            ret.append({cols[i]: row[i] for i in range(len(cols))})
+        return ret
 
     def table_name(self, stream_name, is_temporary=False, without_schema=False):
         stream_dict = stream_name_to_dict(stream_name)
@@ -359,30 +320,20 @@ class DbSync:
         stream = stream_schema_message['stream']
         self.logger.info("Loading %d rows into '%s'", count, self.table_name(stream, False))
 
-        with self.open_connection() as connection:
-            with connection.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                inserts = 0
-                updates = 0
+        cur = self.conn
+        temp_table = self.table_name(stream_schema_message['stream'], is_temporary=True)
+        cur.execute(self.create_table_query(table_name=temp_table, is_temporary=True))
 
-                temp_table = self.table_name(stream_schema_message['stream'], is_temporary=True)
-                cur.execute(self.create_table_query(table_name=temp_table, is_temporary=True))
-
-                copy_sql = "COPY {} ({}) FROM STDIN WITH (FORMAT CSV, ESCAPE '\\')".format(
-                    temp_table,
-                    ', '.join(self.column_names())
-                )
-                self.logger.debug(copy_sql)
-                with open(file, "rb") as f:
-                    cur.copy_expert(copy_sql, f)
-                if len(self.stream_schema_message['key_properties']) > 0:
-                    cur.execute(self.update_from_temp_table(temp_table))
-                    updates = cur.rowcount
-                cur.execute(self.insert_from_temp_table(temp_table))
-                inserts = cur.rowcount
-
-                self.logger.info('Loading into %s: %s',
-                                 self.table_name(stream, False),
-                                 json.dumps({'inserts': inserts, 'updates': updates, 'size_bytes': size_bytes}))
+        copy_sql = "COPY {} ({}) FROM '{}' WITH (FORMAT CSV, ESCAPE '\\')".format(
+            temp_table,
+            ', '.join(self.column_names()),
+            file,
+        )
+        self.logger.debug(copy_sql)
+        cur.execute(copy_sql)
+        if len(self.stream_schema_message['key_properties']) > 0:
+            cur.execute(self.update_from_temp_table(temp_table))
+        cur.execute(self.insert_from_temp_table(temp_table))
 
     # pylint: disable=duplicate-string-formatting-argument
     def insert_from_temp_table(self, temp_table):
@@ -453,27 +404,6 @@ class DbSync:
             ', '.join(columns + primary_key)
         )
 
-    def grant_usage_on_schema(self, schema_name, grantee):
-        query = "GRANT USAGE ON SCHEMA {} TO GROUP {}".format(schema_name, grantee)
-        self.logger.info("Granting USAGE privilege on '%s' schema to '%s'... %s", schema_name, grantee, query)
-        self.query(query)
-
-    def grant_select_on_all_tables_in_schema(self, schema_name, grantee):
-        query = "GRANT SELECT ON ALL TABLES IN SCHEMA {} TO GROUP {}".format(schema_name, grantee)
-        self.logger.info("Granting SELECT ON ALL TABLES privilege on '%s' schema to '%s'... %s",
-                         schema_name,
-                         grantee,
-                         query)
-        self.query(query)
-
-    @classmethod
-    def grant_privilege(cls, schema, grantees, grant_method):
-        if isinstance(grantees, list):
-            for grantee in grantees:
-                grant_method(schema, grantee)
-        elif isinstance(grantees, str):
-            grant_method(schema, grantees)
-
     def create_index(self, stream, column):
         table = self.table_name(stream)
         table_without_schema = self.table_name(stream, without_schema=True)
@@ -498,13 +428,13 @@ class DbSync:
         schema_name = self.schema_name
         schema_rows = 0
 
-        # table_columns_cache is an optional pre-collected list of available objects in postgres
+        # table_columns_cache is an optional pre-collected list of available objects in DuckDB
         if table_columns_cache:
             schema_rows = list(filter(lambda x: x['TABLE_SCHEMA'] == schema_name, table_columns_cache))
         # Query realtime if not pre-collected
         else:
             schema_rows = self.query(
-                'SELECT LOWER(schema_name) schema_name FROM information_schema.schemata WHERE LOWER(schema_name) = %s',
+                'SELECT LOWER(schema_name) schema_name FROM information_schema.schemata WHERE LOWER(schema_name) = ?',
                 (schema_name.lower(),)
             )
 
@@ -513,18 +443,16 @@ class DbSync:
             self.logger.info("Schema '%s' does not exist. Creating... %s", schema_name, query)
             self.query(query)
 
-            self.grant_privilege(schema_name, self.grantees, self.grant_usage_on_schema)
-
     def get_tables(self):
         return self.query(
-            'SELECT table_name FROM information_schema.tables WHERE table_schema = %s',
+            'SELECT table_name FROM information_schema.tables WHERE table_schema = ?',
             (self.schema_name,)
         )
 
     def get_table_columns(self, table_name):
-        return self.query("""SELECT column_name, data_type
+      return self.query("""SELECT column_name, data_type
       FROM information_schema.columns
-      WHERE lower(table_name) = %s AND lower(table_schema) = %s""", (table_name.replace("\"", "").lower(),
+      WHERE lower(table_name) = ? AND lower(table_schema) = ?""", (table_name.replace("\"", "").lower(),
                                                                      self.schema_name.lower()))
 
     def update_columns(self):
@@ -587,8 +515,6 @@ class DbSync:
             query = self.create_table_query()
             self.logger.info("Table '%s' does not exist. Creating... %s", table_name, query)
             self.query(query)
-
-            self.grant_privilege(self.schema_name, self.grantees, self.grant_select_on_all_tables_in_schema)
         else:
             self.logger.info("Table '%s' exists", table_name)
             self.update_columns()

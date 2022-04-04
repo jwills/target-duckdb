@@ -1,6 +1,6 @@
 import unittest
 
-import target_postgres
+import target_duckdb
 
 
 class TestUnit(unittest.TestCase):
@@ -13,14 +13,10 @@ class TestUnit(unittest.TestCase):
 
     def test_config_validation(self):
         """Test configuration validator"""
-        validator = target_postgres.db_sync.validate_config
+        validator = target_duckdb.db_sync.validate_config
         empty_config = {}
         minimal_config = {
-            'host':                     "dummy-value",
-            'port':                     5432,
-            'user':                     "dummy-value",
-            'password':                 "dummy-value",
-            'dbname':                   "dummy-value",
+            'filepath':                 "dummy-value",
             'default_target_schema':    "dummy-value"
         }
 
@@ -50,8 +46,8 @@ class TestUnit(unittest.TestCase):
 
 
     def test_column_type_mapping(self):
-        """Test JSON type to Postgres column type mappings"""
-        mapper = target_postgres.db_sync.column_type
+        """Test JSON type to DuckDB column type mappings"""
+        mapper = target_duckdb.db_sync.column_type
 
         # Incoming JSON schema types
         json_str =          {"type": ["string"]             }
@@ -70,59 +66,59 @@ class TestUnit(unittest.TestCase):
         json_obj =          {"type": ["object"]             }
         json_arr =          {"type": ["array"]              }
         
-        # Mapping from JSON schema types to Postgres column types
-        self.assertEqual(mapper(json_str)          , 'character varying')
-        self.assertEqual(mapper(json_str_or_null)  , 'character varying')
-        self.assertEqual(mapper(json_dt)           , 'timestamp without time zone')
-        self.assertEqual(mapper(json_dt_or_null)   , 'timestamp without time zone')
-        self.assertEqual(mapper(json_t)            , 'time without time zone')
-        self.assertEqual(mapper(json_t_or_null)    , 'time without time zone')
-        self.assertEqual(mapper(json_num)          , 'double precision')
+        # Mapping from JSON schema types to DuckDB column types
+        self.assertEqual(mapper(json_str)          , 'varchar')
+        self.assertEqual(mapper(json_str_or_null)  , 'varchar')
+        self.assertEqual(mapper(json_dt)           , 'timestamp')
+        self.assertEqual(mapper(json_dt_or_null)   , 'timestamp')
+        self.assertEqual(mapper(json_t)            , 'time')
+        self.assertEqual(mapper(json_t_or_null)    , 'time')
+        self.assertEqual(mapper(json_num)          , 'double')
         self.assertEqual(mapper(json_smallint)     , 'smallint')
         self.assertEqual(mapper(json_int)          , 'integer')
         self.assertEqual(mapper(json_bigint)       , 'bigint')
-        self.assertEqual(mapper(json_nobound_int)  , 'numeric')
-        self.assertEqual(mapper(json_int_or_str)   , 'character varying')
+        self.assertEqual(mapper(json_nobound_int)  , 'decimal')
+        self.assertEqual(mapper(json_int_or_str)   , 'varchar')
         self.assertEqual(mapper(json_bool)         , 'boolean')
-        self.assertEqual(mapper(json_obj)          , 'jsonb')
-        self.assertEqual(mapper(json_arr)          , 'jsonb')
+        self.assertEqual(mapper(json_obj)          , 'json')
+        self.assertEqual(mapper(json_arr)          , 'json')
 
     def test_stream_name_to_dict(self):
         """Test identifying catalog, schema and table names from fully qualified stream and table names"""
         # Singer stream name format (Default '-' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_table') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_table') == \
             {"catalog_name": None, "schema_name": None, "table_name": "my_table"}
 
         # Singer stream name format (Default '-' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_schema-my_table') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_schema-my_table') == \
             {"catalog_name": None, "schema_name": "my_schema", "table_name": "my_table"}
 
         # Singer stream name format (Default '-' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_catalog-my_schema-my_table') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_catalog-my_schema-my_table') == \
             {"catalog_name": "my_catalog", "schema_name": "my_schema", "table_name": "my_table"}
 
         # Redshift table format (Custom '.' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_table', separator='.') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_table', separator='.') == \
             {"catalog_name": None, "schema_name": None, "table_name": "my_table"}
 
         # Redshift table format (Custom '.' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_schema.my_table', separator='.') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_schema.my_table', separator='.') == \
             {"catalog_name": None, "schema_name": "my_schema", "table_name": "my_table"}
 
         # Redshift table format (Custom '.' separator)
         assert \
-            target_postgres.db_sync.stream_name_to_dict('my_catalog.my_schema.my_table', separator='.') == \
+            target_duckdb.db_sync.stream_name_to_dict('my_catalog.my_schema.my_table', separator='.') == \
             {"catalog_name": "my_catalog", "schema_name": "my_schema", "table_name": "my_table"}
 
 
     def test_flatten_schema(self):
         """Test flattening of SCHEMA messages"""
-        flatten_schema = target_postgres.db_sync.flatten_schema
+        flatten_schema = target_duckdb.db_sync.flatten_schema
 
         # Schema with no object properties should be empty dict
         schema_with_no_properties = {"type": "object"}
@@ -210,7 +206,7 @@ class TestUnit(unittest.TestCase):
 
     def test_flatten_record(self):
         """Test flattening of RECORD messages"""
-        flatten_record = target_postgres.db_sync.flatten_record
+        flatten_record = target_duckdb.db_sync.flatten_record
 
         empty_record = {}
         # Empty record should be empty dict
@@ -280,7 +276,7 @@ class TestUnit(unittest.TestCase):
             }
 
     def test_flatten_record_with_flatten_schema(self):
-        flatten_record = target_postgres.db_sync.flatten_record
+        flatten_record = target_duckdb.db_sync.flatten_record
 
         flatten_schema = {
             "id": {
