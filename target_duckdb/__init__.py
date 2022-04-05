@@ -79,8 +79,37 @@ def emit_state(state):
         sys.stdout.flush()
 
 
+# pylint: disable=missing-function-docstring,missing-class-docstring
+def validate_config(config):
+    errors = []
+    required_config_keys = [
+        'filepath',
+    ]
+
+    # Check if mandatory keys exist
+    for k in required_config_keys:
+        if not config.get(k, None):
+            errors.append("Required key is missing from config: [{}]".format(k))
+
+    # Check target schema config
+    config_default_target_schema = config.get('default_target_schema', None)
+    config_schema_mapping = config.get('schema_mapping', None)
+    if not config_default_target_schema and not config_schema_mapping:
+        errors.append("Neither 'default_target_schema' (string) nor 'schema_mapping' (object) keys set in config.")
+
+    return errors
+
+
 def duckdb_connect(config):
-    # TODO(jwills): make this richer-- threads, load extensions, etc.
+    # Validate connection configuration
+    config_errors = validate_config(config)
+
+    # Exit if config has errors
+    if len(config_errors) > 0:
+        LOGGER.error("Invalid configuration:\n   * %s", '\n   * '.join(config_errors))
+        sys.exit(1)
+
+    # TODO(jwills): make this richer-- threads, pre-load extensions, etc.
     return duckdb.connect(config['filepath'])
 
 

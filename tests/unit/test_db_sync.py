@@ -13,7 +13,7 @@ class TestUnit(unittest.TestCase):
 
     def test_config_validation(self):
         """Test configuration validator"""
-        validator = target_duckdb.db_sync.validate_config
+        validator = target_duckdb.validate_config
         empty_config = {}
         minimal_config = {
             'filepath':                 "dummy-value",

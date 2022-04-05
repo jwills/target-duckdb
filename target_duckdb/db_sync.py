@@ -9,27 +9,6 @@ import time
 from singer import get_logger
 
 
-# pylint: disable=missing-function-docstring,missing-class-docstring
-def validate_config(config):
-    errors = []
-    required_config_keys = [
-        'filepath',
-    ]
-
-    # Check if mandatory keys exist
-    for k in required_config_keys:
-        if not config.get(k, None):
-            errors.append("Required key is missing from config: [{}]".format(k))
-
-    # Check target schema config
-    config_default_target_schema = config.get('default_target_schema', None)
-    config_schema_mapping = config.get('schema_mapping', None)
-    if not config_default_target_schema and not config_schema_mapping:
-        errors.append("Neither 'default_target_schema' (string) nor 'schema_mapping' (object) keys set in config.")
-
-    return errors
-
-
 # pylint: disable=fixme
 def column_type(schema_property):
     property_type = schema_property['type']
@@ -199,15 +178,6 @@ class DbSync:
 
         # logger to be used across the class's methods
         self.logger = get_logger('target_duckdb')
-
-        # Validate connection configuration
-        config_errors = validate_config(connection_config)
-
-        # Exit if config has errors
-        if len(config_errors) > 0:
-            self.logger.error("Invalid configuration:\n   * %s", '\n   * '.join(config_errors))
-            sys.exit(1)
-
         self.schema_name = None
 
         # Init stream schema

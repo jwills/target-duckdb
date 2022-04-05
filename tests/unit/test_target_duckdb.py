@@ -1,10 +1,9 @@
 import unittest
 import os
-import gzip
-import tempfile
 
 from unittest.mock import patch
 
+import duckdb
 import target_duckdb
 
 
@@ -16,6 +15,10 @@ class TestTargetDuckDB(unittest.TestCase):
 
     def setUp(self):
         self.config = {}
+        self.connection = duckdb.connect()
+    
+    def tearDown(self) -> None:
+        self.connection.close()
 
     @patch('target_duckdb.flush_streams')
     @patch('target_duckdb.DbSync')
@@ -34,6 +37,6 @@ class TestTargetDuckDB(unittest.TestCase):
 
         flush_streams_mock.return_value = '{"currently_syncing": null}'
 
-        target_duckdb.persist_lines(self.config, lines)
+        target_duckdb.persist_lines(self.connection, self.config, lines)
 
         flush_streams_mock.assert_called_once()
