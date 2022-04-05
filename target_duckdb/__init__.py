@@ -10,6 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from tempfile import mkstemp
 
+import duckdb
 from jsonschema import Draft7Validator, FormatChecker
 from singer import get_logger
 
@@ -78,8 +79,13 @@ def emit_state(state):
         sys.stdout.flush()
 
 
+def duckdb_connect(config):
+    # TODO(jwills): make this richer-- threads, load extensions, etc.
+    return duckdb.connect(config['filepath'])
+
+
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,invalid-name,consider-iterating-dictionary
-def persist_lines(config, lines) -> None:
+def persist_lines(connection, config, lines) -> None:
     """Read singer messages and process them line by line"""
     state = None
     flushed_state = None
@@ -206,9 +212,9 @@ def persist_lines(config, lines) -> None:
             key_properties[stream] = o['key_properties']
 
             if config.get('add_metadata_columns') or config.get('hard_delete'):
-                stream_to_sync[stream] = DbSync(config, add_metadata_columns_to_schema(o))
+                stream_to_sync[stream] = DbSync(connection, config, add_metadata_columns_to_schema(o))
             else:
-                stream_to_sync[stream] = DbSync(config, o)
+                stream_to_sync[stream] = DbSync(connection, config, o)
 
             stream_to_sync[stream].create_schema_if_not_exists()
             stream_to_sync[stream].sync_table()
@@ -265,14 +271,14 @@ def flush_streams(
         streams_to_flush = streams.keys()
 
     for stream in streams_to_flush:
-       load_stream_batch(
+        load_stream_batch(
             stream=stream,
             records_to_load=streams[stream],
             row_count=row_count,
             db_sync=stream_to_sync[stream],
             delete_rows=config.get('hard_delete'),
             temp_dir=config.get('temp_dir')
-       )
+        )
 
     # reset flushed stream records to empty to avoid flushing same records
     for stream in streams_to_flush:
@@ -350,7 +356,9 @@ def main():
 
     # Consume singer messages
     singer_messages = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
-    persist_lines(config, singer_messages)
+    connection = duckdb_connect(config)
+    persist_lines(connection, config, singer_messages)
+    connection.close()
 
     LOGGER.debug("Exiting normally")
 

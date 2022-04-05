@@ -31,9 +31,14 @@ class TestIntegration(unittest.TestCase):
         cls.config = test_utils.get_test_config()
         print(cls.config)
         cls.maxDiff = None
-        duckdb = DbSync(cls.config)
+        cls.connection = target_duckdb.duckdb_connect(cls.config)
+        duckdb = DbSync(cls.connection, cls.config)
         if cls.config['default_target_schema']:
             duckdb.query("DROP SCHEMA IF EXISTS {} CASCADE".format(cls.config['default_target_schema']))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.connection.close()
 
     @staticmethod
     def remove_metadata_columns_from_rows(rows):
@@ -70,7 +75,7 @@ class TestIntegration(unittest.TestCase):
         file is available in DuckDB tables correctly.
         Useful to check different loading methods without duplicating assertions
         """
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         default_target_schema = self.config.get('default_target_schema', '')
         schema_mapping = self.config.get('schema_mapping', {})
 
@@ -166,7 +171,7 @@ class TestIntegration(unittest.TestCase):
 
     def assert_logical_streams_are_in_duckdb(self, should_metadata_columns_exist=False):
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_one = duckdb.query("SELECT * FROM {}.logical1_table1 ORDER BY cid".format(target_schema))
         table_two = duckdb.query("SELECT * FROM {}.logical1_table2 ORDER BY cid".format(target_schema))
@@ -240,7 +245,7 @@ class TestIntegration(unittest.TestCase):
 
     def assert_logical_streams_are_in_duckdb_and_are_empty(self):
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_one = duckdb.query("SELECT * FROM {}.logical1_table1 ORDER BY CID".format(target_schema))
         table_two = duckdb.query("SELECT * FROM {}.logical1_table2 ORDER BY CID".format(target_schema))
@@ -255,7 +260,7 @@ class TestIntegration(unittest.TestCase):
     def assert_binary_data_is_in_duckdb(self, table_name, should_metadata_columns_exist=False):
         # Redshift doesn't have binary type. Binary formatted singer values loaded into VARCHAR columns
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_one = duckdb.query('SELECT * FROM {}.{} ORDER BY "new"'.format(target_schema, table_name))
 
@@ -276,18 +281,18 @@ class TestIntegration(unittest.TestCase):
         """Receiving invalid JSONs should raise an exception"""
         tap_lines = test_utils.get_test_tap_lines('invalid-json.json')
         with self.assertRaises(json.decoder.JSONDecodeError):
-            target_duckdb.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
     def test_message_order(self):
         """RECORD message without a previously received SCHEMA message should raise an exception"""
         tap_lines = test_utils.get_test_tap_lines('invalid-message-order.json')
         with self.assertRaises(Exception):
-            target_duckdb.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
     def test_loading_tables(self):
         """Loading multiple tables from the same input tap with various columns types"""
         tap_lines = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_multiple_streams_are_into_duckdb()
 
@@ -297,7 +302,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on adding metadata columns
         self.config['add_metadata_columns'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
         self.assert_multiple_streams_are_into_duckdb(should_metadata_columns_exist=True)
@@ -308,7 +313,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on adding metadata columns
         self.config['parallelism'] = 1
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_multiple_streams_are_into_duckdb()
 
@@ -318,7 +323,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
         self.assert_multiple_streams_are_into_duckdb(
@@ -331,7 +336,7 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-multiple-streams.json')
 
         # Load with default settings
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly
         self.assert_multiple_streams_are_into_duckdb(
@@ -345,7 +350,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
         self.assert_binary_data_is_in_duckdb(
@@ -359,7 +364,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
         self.assert_binary_data_is_in_duckdb(
@@ -372,10 +377,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-unicode-characters.json')
 
         # Load with default settings
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_unicode = duckdb.query("SELECT * FROM {}.test_table_unicode ORDER BY c_pk".format(target_schema))
 
@@ -396,10 +401,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-long-texts.json')
 
         # Load with default settings
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_long_texts = duckdb.query("SELECT * FROM {}.test_table_long_texts ORDER BY c_pk".format(target_schema))
 
@@ -435,10 +440,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-non-db-friendly-columns.json')
 
         # Load with default settings
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_non_db_friendly_columns = duckdb.query(
             "SELECT * FROM {}.test_table_non_db_friendly_columns ORDER BY c_pk".format(target_schema))
@@ -458,10 +463,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines('messages-with-nested-schema.json')
 
         # Load with default settings - Flattening disabled
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Get loaded rows from tables - Transform JSON to string at query time
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         unflattened_table = duckdb.query(
             """SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk""".format(target_schema))
@@ -487,10 +492,10 @@ class TestIntegration(unittest.TestCase):
         self.config['data_flattening_max_level'] = 10
 
         # Load with default settings - Flattening enabled
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         flattened_table = duckdb.query(
             "SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk".format(target_schema))
@@ -517,11 +522,11 @@ class TestIntegration(unittest.TestCase):
             'messages-with-multiple-streams-modified-column.json')
 
         # Load with default settings
-        target_duckdb.persist_lines(self.config, tap_lines_before_column_name_change)
-        target_duckdb.persist_lines(self.config, tap_lines_after_column_name_change)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines_before_column_name_change)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines_after_column_name_change)
 
         # Get loaded rows from tables
-        duckdb = DbSync(self.config)
+        duckdb = DbSync(self.connection, self.config)
         target_schema = self.config.get('default_target_schema', '')
         table_one = duckdb.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
         table_two = duckdb.query("SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema))
@@ -587,7 +592,7 @@ class TestIntegration(unittest.TestCase):
                 }
             }
         }
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Check if data loaded correctly and metadata columns exist
         self.assert_multiple_streams_are_into_duckdb(
@@ -601,7 +606,7 @@ class TestIntegration(unittest.TestCase):
 
         # Turning on hard delete mode
         self.config['hard_delete'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_logical_streams_are_in_duckdb(True)
 
@@ -612,7 +617,7 @@ class TestIntegration(unittest.TestCase):
         # Turning on hard delete mode
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 5
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_logical_streams_are_in_duckdb(True)
 
@@ -623,7 +628,7 @@ class TestIntegration(unittest.TestCase):
         # Turning on hard delete mode
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 5
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_logical_streams_are_in_duckdb_and_are_empty()
 
@@ -636,7 +641,7 @@ class TestIntegration(unittest.TestCase):
         # Set batch size big enough to never has to flush in the middle
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 1000
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # State should be emitted only once with the latest received STATE message
         self.assertEqual(
@@ -664,7 +669,7 @@ class TestIntegration(unittest.TestCase):
         # Set batch size small enough to trigger multiple stream flushes
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 10
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # State should be emitted multiple times, updating the positions only in the stream which got flushed
         self.assertEqual(
@@ -739,7 +744,7 @@ class TestIntegration(unittest.TestCase):
         self.config['hard_delete'] = True
         self.config['batch_size_rows'] = 10
         self.config['flush_all_streams'] = True
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # State should be emitted 6 times, flushing every stream and updating every stream position
         self.assertEqual(
@@ -812,12 +817,12 @@ class TestIntegration(unittest.TestCase):
         self.config['validate_records'] = True
 
         with self.assertRaises(RecordValidationException):
-            target_duckdb.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         # Loading invalid records when record validation disabled should fail at load time
         self.config['validate_records'] = False
         with self.assertRaises(Exception):
-            target_duckdb.persist_lines(self.config, tap_lines)
+            target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
     def test_loading_tables_with_custom_temp_dir(self):
         """Loading multiple tables from the same input tap using custom temp directory"""
@@ -825,6 +830,6 @@ class TestIntegration(unittest.TestCase):
 
         # Setting custom temp_dir
         self.config['temp_dir'] = '~/.pipelinewise/tmp'
-        target_duckdb.persist_lines(self.config, tap_lines)
+        target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_multiple_streams_are_into_duckdb()

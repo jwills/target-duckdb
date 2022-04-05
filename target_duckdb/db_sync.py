@@ -1,7 +1,6 @@
 import json
 import sys
 import collections.abc
-import duckdb
 import inflection
 import re
 import uuid
@@ -175,10 +174,10 @@ def stream_name_to_dict(stream_name, separator='-'):
 
 # pylint: disable=too-many-public-methods,too-many-instance-attributes
 class DbSync:
-    def __init__(self, connection_config, stream_schema_message=None):
+    def __init__(self, connection, connection_config, stream_schema_message=None):
         """
-            connection_config:      DuckDB connection details
-
+            connection:  DuckDB connection
+            connection_config: Connection config information
             stream_schema_message:  An instance of the DbSync class is typically used to load
                                     data only from a certain singer tap stream.
 
@@ -194,6 +193,7 @@ class DbSync:
                                     collecting catalog information from DuckDB for caching
                                     purposes.
         """
+        self.conn = connection
         self.connection_config = connection_config
         self.stream_schema_message = stream_schema_message
 
@@ -208,8 +208,6 @@ class DbSync:
             self.logger.error("Invalid configuration:\n   * %s", '\n   * '.join(config_errors))
             sys.exit(1)
 
-        # TODO(jwills): make this richer-- threads, load extensions, etc.
-        self.conn = duckdb.connect(connection_config['filepath'])
         self.schema_name = None
 
         # Init stream schema
@@ -260,10 +258,6 @@ class DbSync:
             self.data_flattening_max_level = self.connection_config.get('data_flattening_max_level', 0)
             self.flatten_schema = flatten_schema(stream_schema_message['schema'],
                                                  max_level=self.data_flattening_max_level)
-
-    def open_connection(self):
-        conn_string = self.connection_config['filepath']
-        return duckdb.connect(conn_string)
 
     def query(self, query, params=None):
         self.logger.debug("Running query: %s", query)
@@ -450,9 +444,9 @@ class DbSync:
         )
 
     def get_table_columns(self, table_name):
-      return self.query("""SELECT column_name, data_type
-      FROM information_schema.columns
-      WHERE lower(table_name) = ? AND lower(table_schema) = ?""", (table_name.replace("\"", "").lower(),
+        return self.query("""SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE lower(table_name) = ? AND lower(table_schema) = ?""", (table_name.replace("\"", "").lower(),
                                                                      self.schema_name.lower()))
 
     def update_columns(self):
