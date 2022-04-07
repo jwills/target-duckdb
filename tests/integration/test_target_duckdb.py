@@ -80,9 +80,7 @@ class TestIntegration(unittest.TestCase):
         schema_mapping = self.config.get('schema_mapping', {})
 
         # Identify target schema name
-        target_schema = None
-        if default_target_schema is not None and default_target_schema.strip():
-            target_schema = default_target_schema
+        target_schema = "integration_test"
 
         # Get loaded rows from tables
         table_one = duckdb.query("SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema))
