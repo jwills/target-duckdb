@@ -16,7 +16,7 @@ from singer import get_logger
 
 from target_duckdb.db_sync import DbSync
 
-LOGGER = get_logger('target_duckdb')
+LOGGER = get_logger("target_duckdb")
 
 DEFAULT_BATCH_SIZE_ROWS = 100000
 
@@ -48,11 +48,17 @@ def add_metadata_columns_to_schema(schema_message):
     Metadata columns gives information about data injections
     """
     extended_schema_message = schema_message
-    extended_schema_message['schema']['properties']['_sdc_extracted_at'] = {'type': ['null', 'string'],
-                                                                            'format': 'date-time'}
-    extended_schema_message['schema']['properties']['_sdc_batched_at'] = {'type': ['null', 'string'],
-                                                                          'format': 'date-time'}
-    extended_schema_message['schema']['properties']['_sdc_deleted_at'] = {'type': ['null', 'string']}
+    extended_schema_message["schema"]["properties"]["_sdc_extracted_at"] = {
+        "type": ["null", "string"],
+        "format": "date-time",
+    }
+    extended_schema_message["schema"]["properties"]["_sdc_batched_at"] = {
+        "type": ["null", "string"],
+        "format": "date-time",
+    }
+    extended_schema_message["schema"]["properties"]["_sdc_deleted_at"] = {
+        "type": ["null", "string"]
+    }
 
     return extended_schema_message
 
@@ -61,10 +67,12 @@ def add_metadata_values_to_record(record_message):
     """Populate metadata _sdc columns from incoming record message
     The location of the required attributes are fixed in the stream
     """
-    extended_record = record_message['record']
-    extended_record['_sdc_extracted_at'] = record_message.get('time_extracted')
-    extended_record['_sdc_batched_at'] = datetime.now().isoformat()
-    extended_record['_sdc_deleted_at'] = record_message.get('record', {}).get('_sdc_deleted_at')
+    extended_record = record_message["record"]
+    extended_record["_sdc_extracted_at"] = record_message.get("time_extracted")
+    extended_record["_sdc_batched_at"] = datetime.now().isoformat()
+    extended_record["_sdc_deleted_at"] = record_message.get("record", {}).get(
+        "_sdc_deleted_at"
+    )
 
     return extended_record
 
@@ -74,7 +82,7 @@ def emit_state(state):
     consumed by other components"""
     if state is not None:
         line = json.dumps(state)
-        LOGGER.debug('Emitting state %s', line)
+        LOGGER.debug("Emitting state %s", line)
         sys.stdout.write("{}\n".format(line))
         sys.stdout.flush()
 
@@ -83,7 +91,7 @@ def emit_state(state):
 def validate_config(config):
     errors = []
     required_config_keys = [
-        'filepath',
+        "filepath",
     ]
 
     # Check if mandatory keys exist
@@ -92,10 +100,12 @@ def validate_config(config):
             errors.append("Required key is missing from config: [{}]".format(k))
 
     # Check target schema config
-    config_default_target_schema = config.get('default_target_schema', None)
-    config_schema_mapping = config.get('schema_mapping', None)
+    config_default_target_schema = config.get("default_target_schema", None)
+    config_schema_mapping = config.get("schema_mapping", None)
     if not config_default_target_schema and not config_schema_mapping:
-        errors.append("Neither 'default_target_schema' (string) nor 'schema_mapping' (object) keys set in config.")
+        errors.append(
+            "Neither 'default_target_schema' (string) nor 'schema_mapping' (object) keys set in config."
+        )
 
     return errors
 
@@ -106,11 +116,11 @@ def duckdb_connect(config):
 
     # Exit if config has errors
     if len(config_errors) > 0:
-        LOGGER.error("Invalid configuration:\n   * %s", '\n   * '.join(config_errors))
+        LOGGER.error("Invalid configuration:\n   * %s", "\n   * ".join(config_errors))
         sys.exit(1)
 
     # TODO(jwills): make this richer-- threads, pre-load extensions, etc.
-    return duckdb.connect(config['filepath'])
+    return duckdb.connect(config["filepath"])
 
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,invalid-name,consider-iterating-dictionary
@@ -125,46 +135,55 @@ def persist_lines(connection, config, lines) -> None:
     row_count = {}
     stream_to_sync = {}
     total_row_count = {}
-    batch_size_rows = config.get('batch_size_rows', DEFAULT_BATCH_SIZE_ROWS)
+    batch_size_rows = config.get("batch_size_rows", DEFAULT_BATCH_SIZE_ROWS)
 
     # Loop over lines from stdin
     for line in lines:
         try:
             o = json.loads(line)
         except json.decoder.JSONDecodeError:
-            LOGGER.error('Unable to parse:\n%s', line)
+            LOGGER.error("Unable to parse:\n%s", line)
             raise
 
-        if 'type' not in o:
+        if "type" not in o:
             raise Exception("Line is missing required key 'type': {}".format(line))
-        t = o['type']
+        t = o["type"]
 
-        if t == 'RECORD':
-            if 'stream' not in o:
-                raise Exception("Line is missing required key 'stream': {}".format(line))
-            if o['stream'] not in schemas:
+        if t == "RECORD":
+            if "stream" not in o:
                 raise Exception(
-                    "A record for stream {} was encountered before a corresponding schema".format(o['stream']))
+                    "Line is missing required key 'stream': {}".format(line)
+                )
+            if o["stream"] not in schemas:
+                raise Exception(
+                    "A record for stream {} was encountered before a corresponding schema".format(
+                        o["stream"]
+                    )
+                )
 
             # Get schema for this record's stream
-            stream = o['stream']
+            stream = o["stream"]
 
             # Validate record
-            if config.get('validate_records'):
+            if config.get("validate_records"):
                 try:
-                    validators[stream].validate(float_to_decimal(o['record']))
+                    validators[stream].validate(float_to_decimal(o["record"]))
                 except Exception as ex:
                     if type(ex).__name__ == "InvalidOperation":
                         raise InvalidValidationOperationException(
                             f"Data validation failed and cannot load to destination. RECORD: {o['record']}\n"
                             "multipleOf validations that allows long precisions are not supported (i.e. with 15 digits"
-                            "or more) Try removing 'multipleOf' methods from JSON schema.") from ex
+                            "or more) Try removing 'multipleOf' methods from JSON schema."
+                        ) from ex
                     raise RecordValidationException(
-                        f"Record does not pass schema validation. RECORD: {o['record']}") from ex
+                        f"Record does not pass schema validation. RECORD: {o['record']}"
+                    ) from ex
 
-            primary_key_string = stream_to_sync[stream].record_primary_key_string(o['record'])
+            primary_key_string = stream_to_sync[stream].record_primary_key_string(
+                o["record"]
+            )
             if not primary_key_string:
-                primary_key_string = 'RID-{}'.format(total_row_count[stream])
+                primary_key_string = "RID-{}".format(total_row_count[stream])
 
             if stream not in records_to_load:
                 records_to_load[stream] = {}
@@ -175,57 +194,72 @@ def persist_lines(connection, config, lines) -> None:
                 total_row_count[stream] += 1
 
             # append record
-            if config.get('add_metadata_columns') or config.get('hard_delete'):
-                records_to_load[stream][primary_key_string] = add_metadata_values_to_record(o)
+            if config.get("add_metadata_columns") or config.get("hard_delete"):
+                records_to_load[stream][
+                    primary_key_string
+                ] = add_metadata_values_to_record(o)
             else:
-                records_to_load[stream][primary_key_string] = o['record']
+                records_to_load[stream][primary_key_string] = o["record"]
 
             row_count[stream] = len(records_to_load[stream])
 
             if row_count[stream] >= batch_size_rows:
                 # flush all streams, delete records if needed, reset counts and then emit current state
-                if config.get('flush_all_streams'):
+                if config.get("flush_all_streams"):
                     filter_streams = None
                 else:
                     filter_streams = [stream]
 
                 # Flush and return a new state dict with new positions only for the flushed streams
-                flushed_state = flush_streams(records_to_load,
-                                              row_count,
-                                              stream_to_sync,
-                                              config,
-                                              state,
-                                              flushed_state,
-                                              filter_streams=filter_streams)
+                flushed_state = flush_streams(
+                    records_to_load,
+                    row_count,
+                    stream_to_sync,
+                    config,
+                    state,
+                    flushed_state,
+                    filter_streams=filter_streams,
+                )
 
                 # emit last encountered state
                 emit_state(copy.deepcopy(flushed_state))
 
-        elif t == 'STATE':
-            LOGGER.debug('Setting state to %s', o['value'])
-            state = o['value']
+        elif t == "STATE":
+            LOGGER.debug("Setting state to %s", o["value"])
+            state = o["value"]
 
             # Initially set flushed state
             if not flushed_state:
                 flushed_state = copy.deepcopy(state)
 
-        elif t == 'SCHEMA':
-            if 'stream' not in o:
-                raise Exception("Line is missing required key 'stream': {}".format(line))
-            stream = o['stream']
+        elif t == "SCHEMA":
+            if "stream" not in o:
+                raise Exception(
+                    "Line is missing required key 'stream': {}".format(line)
+                )
+            stream = o["stream"]
 
-            schemas[stream] = float_to_decimal(o['schema'])
-            validators[stream] = Draft7Validator(schemas[stream], format_checker=FormatChecker())
+            schemas[stream] = float_to_decimal(o["schema"])
+            validators[stream] = Draft7Validator(
+                schemas[stream], format_checker=FormatChecker()
+            )
 
             # flush records from previous stream SCHEMA
             if row_count.get(stream, 0) > 0:
-                flushed_state = flush_streams(records_to_load, row_count, stream_to_sync, config, state, flushed_state)
+                flushed_state = flush_streams(
+                    records_to_load,
+                    row_count,
+                    stream_to_sync,
+                    config,
+                    state,
+                    flushed_state,
+                )
 
                 # emit latest encountered state
                 emit_state(flushed_state)
 
             # key_properties key must be available in the SCHEMA message.
-            if 'key_properties' not in o:
+            if "key_properties" not in o:
                 raise Exception("key_properties field is required")
 
             # Log based and Incremental replications on tables with no Primary Key
@@ -234,14 +268,22 @@ def persist_lines(connection, config, lines) -> None:
             #
             # If you want to load tables with no Primary Key:
             #  1) Set ` 'primary_key_required': false ` in the target-duckdb config.json
-            if config.get('primary_key_required', True) and len(o['key_properties']) == 0:
-                LOGGER.critical("Primary key is set to mandatory but not defined in the [%s] stream", stream)
+            if (
+                config.get("primary_key_required", True)
+                and len(o["key_properties"]) == 0
+            ):
+                LOGGER.critical(
+                    "Primary key is set to mandatory but not defined in the [%s] stream",
+                    stream,
+                )
                 raise Exception("key_properties field is required")
 
-            key_properties[stream] = o['key_properties']
+            key_properties[stream] = o["key_properties"]
 
-            if config.get('add_metadata_columns') or config.get('hard_delete'):
-                stream_to_sync[stream] = DbSync(connection, config, add_metadata_columns_to_schema(o))
+            if config.get("add_metadata_columns") or config.get("hard_delete"):
+                stream_to_sync[stream] = DbSync(
+                    connection, config, add_metadata_columns_to_schema(o)
+                )
             else:
                 stream_to_sync[stream] = DbSync(connection, config, o)
 
@@ -251,22 +293,25 @@ def persist_lines(connection, config, lines) -> None:
             row_count[stream] = 0
             total_row_count[stream] = 0
 
-        elif t == 'ACTIVATE_VERSION':
-            LOGGER.debug('ACTIVATE_VERSION message')
+        elif t == "ACTIVATE_VERSION":
+            LOGGER.debug("ACTIVATE_VERSION message")
 
             # Initially set flushed state
             if not flushed_state:
                 flushed_state = copy.deepcopy(state)
 
         else:
-            raise Exception("Unknown message type {} in message {}"
-                            .format(o['type'], o))
+            raise Exception(
+                "Unknown message type {} in message {}".format(o["type"], o)
+            )
 
     # if some bucket has records that need to be flushed but haven't reached batch size
     # then flush all buckets.
     if sum(row_count.values()) > 0:
         # flush all streams one last time, delete records if needed, reset counts and then emit current state
-        flushed_state = flush_streams(records_to_load, row_count, stream_to_sync, config, state, flushed_state)
+        flushed_state = flush_streams(
+            records_to_load, row_count, stream_to_sync, config, state, flushed_state
+        )
 
     # emit latest state
     emit_state(copy.deepcopy(flushed_state))
@@ -274,13 +319,14 @@ def persist_lines(connection, config, lines) -> None:
 
 # pylint: disable=too-many-arguments
 def flush_streams(
-        streams,
-        row_count,
-        stream_to_sync,
-        config,
-        state,
-        flushed_state,
-        filter_streams=None):
+    streams,
+    row_count,
+    stream_to_sync,
+    config,
+    state,
+    flushed_state,
+    filter_streams=None,
+):
     """
     Flushes all buckets and resets records count to 0 as well as empties records to load list
     :param streams: dictionary with records to load per stream
@@ -305,8 +351,8 @@ def flush_streams(
             records_to_load=streams[stream],
             row_count=row_count,
             db_sync=stream_to_sync[stream],
-            delete_rows=config.get('hard_delete'),
-            temp_dir=config.get('temp_dir')
+            delete_rows=config.get("hard_delete"),
+            temp_dir=config.get("temp_dir"),
         )
 
     # reset flushed stream records to empty to avoid flushing same records
@@ -316,12 +362,14 @@ def flush_streams(
         # Update flushed streams
         if filter_streams:
             # update flushed_state position if we have state information for the stream
-            if state is not None and stream in state.get('bookmarks', {}):
+            if state is not None and stream in state.get("bookmarks", {}):
                 # Create bookmark key if not exists
-                if 'bookmarks' not in flushed_state:
-                    flushed_state['bookmarks'] = {}
+                if "bookmarks" not in flushed_state:
+                    flushed_state["bookmarks"] = {}
                 # Copy the stream bookmark from the latest state
-                flushed_state['bookmarks'][stream] = copy.deepcopy(state['bookmarks'][stream])
+                flushed_state["bookmarks"][stream] = copy.deepcopy(
+                    state["bookmarks"][stream]
+                )
 
         # If we flush every bucket use the latest state
         else:
@@ -332,7 +380,9 @@ def flush_streams(
 
 
 # pylint: disable=too-many-arguments
-def load_stream_batch(stream, records_to_load, row_count, db_sync, delete_rows=False, temp_dir=None):
+def load_stream_batch(
+    stream, records_to_load, row_count, db_sync, delete_rows=False, temp_dir=None
+):
     """Load a batch of records and do post load operations, like creating
     or deleting rows"""
     # Load into DuckDB
@@ -358,11 +408,11 @@ def flush_records(stream, records_to_load, row_count, db_sync, temp_dir=None):
         os.makedirs(temp_dir, exist_ok=True)
 
     size_bytes = 0
-    csv_fd, csv_file = mkstemp(suffix='.csv', prefix=f'{stream}_', dir=temp_dir)
-    with open(csv_fd, 'w+b') as f:
+    csv_fd, csv_file = mkstemp(suffix=".csv", prefix=f"{stream}_", dir=temp_dir)
+    with open(csv_fd, "w+b") as f:
         for record in records_to_load.values():
             csv_line = db_sync.record_to_csv_line(record)
-            f.write(bytes(csv_line + '\n', 'UTF-8'))
+            f.write(bytes(csv_line + "\n", "UTF-8"))
 
     size_bytes = os.path.getsize(csv_file)
     db_sync.load_csv(csv_file, row_count, size_bytes)
@@ -374,7 +424,7 @@ def flush_records(stream, records_to_load, row_count, db_sync, temp_dir=None):
 def main():
     """Main entry point"""
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('-c', '--config', help='Config file')
+    arg_parser.add_argument("-c", "--config", help="Config file")
     args = arg_parser.parse_args()
 
     if args.config:
@@ -384,7 +434,7 @@ def main():
         config = {}
 
     # Consume singer messages
-    singer_messages = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+    singer_messages = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
     connection = duckdb_connect(config)
     persist_lines(connection, config, singer_messages)
     connection.close()
@@ -392,5 +442,5 @@ def main():
     LOGGER.debug("Exiting normally")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
