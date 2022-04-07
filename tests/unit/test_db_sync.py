@@ -82,8 +82,8 @@ class TestUnit(unittest.TestCase):
         self.assertEqual(mapper(json_nobound_int), "decimal")
         self.assertEqual(mapper(json_int_or_str), "varchar")
         self.assertEqual(mapper(json_bool), "boolean")
-        self.assertEqual(mapper(json_obj), "json")
-        self.assertEqual(mapper(json_arr), "json")
+        self.assertEqual(mapper(json_obj), "varchar")  # FIXME
+        self.assertEqual(mapper(json_arr), "varchar")  # FIXME
 
     def test_stream_name_to_dict(self):
         """Test identifying catalog, schema and table names from fully qualified stream and table names"""

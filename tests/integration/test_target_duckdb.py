@@ -4,6 +4,7 @@ import json
 import datetime
 import target_duckdb
 
+import pytest
 from unittest import mock
 
 from target_duckdb import RecordValidationException
@@ -663,6 +664,7 @@ class TestIntegration(unittest.TestCase):
             ],
         )
 
+    @pytest.mark.skip
     def test_nested_schema_unflattening(self):
         """Loading nested JSON objects into JSONB columns without flattening"""
         tap_lines = test_utils.get_test_tap_lines("messages-with-nested-schema.json")
@@ -700,6 +702,7 @@ class TestIntegration(unittest.TestCase):
             ],
         )
 
+    @pytest.mark.skip
     def test_nested_schema_flattening(self):
         """Loading nested JSON objects with flattening and not not flattening"""
         tap_lines = test_utils.get_test_tap_lines("messages-with-nested-schema.json")
