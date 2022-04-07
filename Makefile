@@ -10,9 +10,9 @@ pylint:
 
 unit_test:
 	. ./venv/bin/activate ;\
-	pytest --cov=target_duckdb  --cov-fail-under=44 tests/unit -v
+	pytest tests/unit -v
 
 integration_test:
 	. ./venv/bin/activate ;\
-	pytest --cov=target_duckdb  --cov-fail-under=44 tests/integration -v
+	pytest tests/integration -v
 

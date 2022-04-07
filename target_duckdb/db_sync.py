@@ -1,5 +1,4 @@
 import json
-import sys
 import collections.abc
 import inflection
 import re
