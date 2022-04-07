@@ -4,8 +4,6 @@
 
 [Singer](https://www.singer.io/) target that loads data into DuckDB following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/docs/SPEC.md).
 
-This is a [PipelineWise](https://transferwise.github.io/pipelinewise) compatible target connector.
-
 ### Install
 
 First, make sure Python 3 is installed on your system or follow these
