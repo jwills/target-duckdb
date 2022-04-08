@@ -1,12 +1,18 @@
 import json
 import collections.abc
-import inflection
 import re
 import uuid
 import itertools
 import time
 from singer import get_logger
 
+
+# copied from inflection.camelize to eliminate a dependency
+def camelize(string: str, uppercase_first_letter: bool = True) -> str:
+    if uppercase_first_letter:
+        return re.sub(r"(?:^|_)(.)", lambda m: m.group(1).upper(), string)
+    else:
+        return string[0].lower() + camelize(string)[1:]
 
 # pylint: disable=fixme
 def column_type(schema_property):
@@ -60,7 +66,7 @@ def flatten_key(k, parent_key, sep):
     reducer_index = 0
     while len(sep.join(inflected_key)) >= 63 and reducer_index < len(inflected_key):
         reduced_key = re.sub(
-            r"[a-z]", "", inflection.camelize(inflected_key[reducer_index])
+            r"[a-z]", "", camelize(inflected_key[reducer_index])
         )
         inflected_key[reducer_index] = (
             reduced_key if len(reduced_key) > 1 else inflected_key[reducer_index][0:3]
