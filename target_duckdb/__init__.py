@@ -403,22 +403,7 @@ def load_stream_batch(
 # pylint: disable=unused-argument
 def flush_records(stream, records_to_load, row_count, db_sync, temp_dir=None):
     """Take a list of records and load into database"""
-    if temp_dir:
-        temp_dir = os.path.expanduser(temp_dir)
-        os.makedirs(temp_dir, exist_ok=True)
-
-    size_bytes = 0
-    csv_fd, csv_file = mkstemp(suffix=".csv", prefix=f"{stream}_", dir=temp_dir)
-    with open(csv_fd, "w+b") as f:
-        for record in records_to_load.values():
-            csv_line = db_sync.record_to_csv_line(record)
-            f.write(bytes(csv_line + "\n", "UTF-8"))
-
-    size_bytes = os.path.getsize(csv_file)
-    db_sync.load_csv(csv_file, row_count, size_bytes)
-
-    # Delete temp file
-    os.remove(csv_file)
+    db_sync.load_rows(records_to_load.values(), row_count)
 
 
 def main():

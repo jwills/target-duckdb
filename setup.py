@@ -7,7 +7,7 @@ with open("README.md") as f:
 
 setup(
     name="target-duckdb",
-    version="0.1.0",
+    version="0.2.0",
     description="Singer.io target for loading data into DuckDB",
     long_description=long_description,
     long_description_content_type="text/markdown",

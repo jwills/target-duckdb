@@ -320,20 +320,20 @@ class DbSync:
             raise exc
         return ",".join(key_props)
 
-    def record_to_csv_line(self, record):
+    def record_to_flattened(self, record):
         flatten = flatten_record(
             record, self.flatten_schema, max_level=self.data_flattening_max_level
         )
-        return ",".join(
-            [
-                json.dumps(flatten[name], ensure_ascii=False)
-                if name in flatten and (flatten[name] == 0 or flatten[name])
-                else ""
-                for name in self.flatten_schema
-            ]
-        )
 
-    def load_csv(self, file, count, size_bytes):
+        return [
+            flatten[name]
+            if name in flatten and (flatten[name] == 0 or flatten[name])
+            else None
+            for name in self.flatten_schema
+        ]
+
+
+    def load_rows(self, records, count):
         stream_schema_message = self.stream_schema_message
         stream = stream_schema_message["stream"]
         self.logger.info(
@@ -344,13 +344,15 @@ class DbSync:
         temp_table = self.table_name(stream_schema_message["stream"], is_temporary=True)
         cur.execute(self.create_table_query(table_name=temp_table, is_temporary=True))
 
-        copy_sql = "COPY {} ({}) FROM '{}' WITH (FORMAT CSV, ESCAPE '\\')".format(
+        insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
             temp_table,
             ", ".join(self.column_names()),
-            file,
+            ", ".join(["?" for x in self.column_names()])
         )
-        self.logger.debug(copy_sql)
-        cur.execute(copy_sql)
+        self.logger.debug(insert_sql)
+        for record in records:
+            cur.execute(insert_sql, self.record_to_flattened(record))
+
         if len(self.stream_schema_message["key_properties"]) > 0:
             cur.execute(self.update_from_temp_table(temp_table))
         cur.execute(self.insert_from_temp_table(temp_table))
@@ -405,6 +407,9 @@ class DbSync:
 
     def column_names(self):
         return [safe_column_name(name) for name in self.flatten_schema]
+
+    def column_types(self):
+        return [column_type(schema) for (name, schema) in self.flatten_schema.items()]
 
     def create_table_query(self, table_name=None, is_temporary=False):
         stream_schema_message = self.stream_schema_message
