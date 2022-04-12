@@ -20,8 +20,7 @@ def column_type(schema_property):
     property_format = schema_property["format"] if "format" in schema_property else None
     col_type = "varchar"
     if "object" in property_type or "array" in property_type:
-        # TODO(jwills): fix this when JSON types are supported via extensions in DuckDB
-        col_type = "varchar"
+        col_type = "json"
 
     # Every date-time JSON value is currently mapped to TIMESTAMP (no time zone)
     elif property_format == "date-time":

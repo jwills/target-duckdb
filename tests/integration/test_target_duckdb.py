@@ -664,9 +664,8 @@ class TestIntegration(unittest.TestCase):
             ],
         )
 
-    @pytest.mark.skip
     def test_nested_schema_unflattening(self):
-        """Loading nested JSON objects into JSONB columns without flattening"""
+        """Loading nested JSON objects into JSON columns without flattening"""
         tap_lines = test_utils.get_test_tap_lines("messages-with-nested-schema.json")
 
         # Load with default settings - Flattening disabled
@@ -687,22 +686,21 @@ class TestIntegration(unittest.TestCase):
             [
                 {
                     "c_pk": 1,
-                    "c_array": [1, 2, 3],
-                    "c_object": {"key_1": "value_1"},
-                    "c_object_with_props": {"key_1": "value_1"},
-                    "c_nested_object": {
+                    "c_array": json.dumps([1, 2, 3]),
+                    "c_object": json.dumps({"key_1": "value_1"}),
+                    "c_object_with_props": json.dumps({"key_1": "value_1"}),
+                    "c_nested_object": json.dumps({
                         "nested_prop_1": "nested_value_1",
                         "nested_prop_2": "nested_value_2",
                         "nested_prop_3": {
                             "multi_nested_prop_1": "multi_value_1",
                             "multi_nested_prop_2": "multi_value_2",
                         },
-                    },
+                    }),
                 }
             ],
         )
 
-    @pytest.mark.skip
     def test_nested_schema_flattening(self):
         """Loading nested JSON objects with flattening and not not flattening"""
         tap_lines = test_utils.get_test_tap_lines("messages-with-nested-schema.json")
@@ -728,7 +726,7 @@ class TestIntegration(unittest.TestCase):
             [
                 {
                     "c_pk": 1,
-                    "c_array": [1, 2, 3],
+                    "c_array": json.dumps([1, 2, 3]),
                     "c_object": None,
                     # Cannot map RECORD to SCHEMA. SCHEMA doesn't have properties that requires for flattening
                     "c_object_with_props__key_1": "value_1",
