@@ -12,14 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ 3.6, 3.7, 3.8 ]
+        python-version: [ 3.9 ]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
-      - name: Start PG test container
-        run: docker-compose up -d --build db
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
@@ -29,9 +26,6 @@ jobs:
       - name: Setup virtual environment
         run: make venv
 
-      - name: Pylinting
-        run: make pylint
-
       - name: Unit Tests
         run: make unit_test
 
@@ -39,6 +33,3 @@ jobs:
         env:
           LOGGING_CONF_FILE: ./sample_logging.conf
         run: make integration_test
-
-      - name: Shutdown PG test container
-        run: docker-compose down
