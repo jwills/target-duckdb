@@ -14,6 +14,7 @@ def camelize(string: str, uppercase_first_letter: bool = True) -> str:
     else:
         return string[0].lower() + camelize(string)[1:]
 
+
 # pylint: disable=fixme
 def column_type(schema_property):
     property_type = schema_property["type"]
@@ -64,9 +65,7 @@ def flatten_key(k, parent_key, sep):
     inflected_key = full_key.copy()
     reducer_index = 0
     while len(sep.join(inflected_key)) >= 63 and reducer_index < len(inflected_key):
-        reduced_key = re.sub(
-            r"[a-z]", "", camelize(inflected_key[reducer_index])
-        )
+        reduced_key = re.sub(r"[a-z]", "", camelize(inflected_key[reducer_index]))
         inflected_key[reducer_index] = (
             reduced_key if len(reduced_key) > 1 else inflected_key[reducer_index][0:3]
         ).lower()
@@ -337,7 +336,6 @@ class DbSync:
             for name in self.flatten_schema
         ]
 
-
     def load_rows(self, records, count):
         stream_schema_message = self.stream_schema_message
         stream = stream_schema_message["stream"]
@@ -352,7 +350,7 @@ class DbSync:
         insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
             temp_table,
             ", ".join(self.column_names()),
-            ", ".join(["?" for x in self.column_names()])
+            ", ".join(["?" for x in self.column_names()]),
         )
         self.logger.debug(insert_sql)
         for record in records:
@@ -425,7 +423,11 @@ class DbSync:
         ]
 
         if len(stream_schema_message["key_properties"]) > 0:
-            primary_key = ["PRIMARY KEY ({})".format(', '.join(primary_column_names(stream_schema_message)))]
+            primary_key = [
+                "PRIMARY KEY ({})".format(
+                    ", ".join(primary_column_names(stream_schema_message))
+                )
+            ]
         else:
             primary_key = []
 

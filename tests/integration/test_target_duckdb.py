@@ -689,14 +689,16 @@ class TestIntegration(unittest.TestCase):
                     "c_array": json.dumps([1, 2, 3]),
                     "c_object": json.dumps({"key_1": "value_1"}),
                     "c_object_with_props": json.dumps({"key_1": "value_1"}),
-                    "c_nested_object": json.dumps({
-                        "nested_prop_1": "nested_value_1",
-                        "nested_prop_2": "nested_value_2",
-                        "nested_prop_3": {
-                            "multi_nested_prop_1": "multi_value_1",
-                            "multi_nested_prop_2": "multi_value_2",
-                        },
-                    }),
+                    "c_nested_object": json.dumps(
+                        {
+                            "nested_prop_1": "nested_value_1",
+                            "nested_prop_2": "nested_value_2",
+                            "nested_prop_3": {
+                                "multi_nested_prop_1": "multi_value_1",
+                                "multi_nested_prop_2": "multi_value_2",
+                            },
+                        }
+                    ),
                 }
             ],
         )

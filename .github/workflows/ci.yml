@@ -26,9 +26,6 @@ jobs:
       - name: Setup virtual environment
         run: make venv
 
-      - name: Pylinting
-        run: make pylint
-
       - name: Unit Tests
         run: make unit_test
 
