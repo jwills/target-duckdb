@@ -388,7 +388,8 @@ class DbSync:
 
     def update_from_temp_table(self, temp_table):
         stream_schema_message = self.stream_schema_message
-        columns = self.column_names()
+        primary_key_columns = set(primary_column_names(self.stream_schema_message))
+        columns = [x for x in self.column_names() if x not in primary_key_columns]
         table = self.table_name(stream_schema_message["stream"])
 
         return """UPDATE {} SET {} FROM {} s
@@ -423,10 +424,10 @@ class DbSync:
             for (name, schema) in self.flatten_schema.items()
         ]
 
-        # TODO(jwills): bring this back once I fix https://github.com/duckdb/duckdb/issues/3265
-        # primary_key = ["PRIMARY KEY ({})".format(', '.join(primary_column_names(stream_schema_message)))] \
-        #    if len(stream_schema_message['key_properties']) > 0 else []
-        primary_key = []
+        if len(stream_schema_message["key_properties"]) > 0:
+            primary_key = ["PRIMARY KEY ({})".format(', '.join(primary_column_names(stream_schema_message)))]
+        else:
+            primary_key = []
 
         if not table_name:
             gen_table_name = self.table_name(
