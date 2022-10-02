@@ -41,7 +41,7 @@ def column_type(schema_property):
             elif schema_property["maximum"] <= 9223372036854775807:
                 col_type = "bigint"
         else:
-            col_type = "decimal"
+            col_type = "hugeint"
     elif "boolean" in property_type:
         col_type = "boolean"
 

@@ -79,7 +79,7 @@ class TestUnit(unittest.TestCase):
         self.assertEqual(mapper(json_smallint), "smallint")
         self.assertEqual(mapper(json_int), "integer")
         self.assertEqual(mapper(json_bigint), "bigint")
-        self.assertEqual(mapper(json_nobound_int), "decimal")
+        self.assertEqual(mapper(json_nobound_int), "hugeint")
         self.assertEqual(mapper(json_int_or_str), "varchar")
         self.assertEqual(mapper(json_bool), "boolean")
         self.assertEqual(mapper(json_obj), "json")
