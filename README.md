@@ -42,6 +42,7 @@ Additional options in `config.json`:
 
 | Property                            | Type    | Required?  | Description                                                   |
 |-------------------------------------|---------|------------|---------------------------------------------------------------|
+| filepath                            | String  | Yes        | The path to the DuckDB file that you want to write on the local filesystem. |	
 | batch_size_rows                     | Integer |            | (Default: 100000) Maximum number of rows in each batch. At the end of each batch, the rows in the batch are loaded into DuckDB. |
 | flush_all_streams                   | Boolean |            | (Default: False) Flush and load every stream into DuckDB when one batch is full. Warning: This may trigger the COPY command to use files with low number of records. |
 | default_target_schema               | String  |            | Name of the schema where the tables will be created. If `schema_mapping` is not defined then every stream sent by the tap is loaded into this schema.    |
