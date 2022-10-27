@@ -62,17 +62,7 @@ def column_clause(name, schema_property):
 
 
 def flatten_key(k, parent_key, sep):
-    full_key = parent_key + [k]
-    inflected_key = full_key.copy()
-    reducer_index = 0
-    while len(sep.join(inflected_key)) >= 63 and reducer_index < len(inflected_key):
-        reduced_key = re.sub(r"[a-z]", "", camelize(inflected_key[reducer_index]))
-        inflected_key[reducer_index] = (
-            reduced_key if len(reduced_key) > 1 else inflected_key[reducer_index][0:3]
-        ).lower()
-        reducer_index += 1
-
-    return sep.join(inflected_key)
+    return sep.join(parent_key + [k])
 
 
 # pylint: disable=dangerous-default-value,invalid-name
