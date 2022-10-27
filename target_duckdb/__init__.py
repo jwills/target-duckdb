@@ -12,9 +12,9 @@ from tempfile import mkstemp
 
 import duckdb
 from jsonschema import Draft7Validator, FormatChecker
-from singer import get_logger
 
 from target_duckdb.db_sync import DbSync
+from target_duckdb.logger import get_logger
 
 LOGGER = get_logger("target_duckdb")
 

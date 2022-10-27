@@ -4,7 +4,8 @@ import re
 import uuid
 import itertools
 import time
-from singer import get_logger
+
+from target_duckdb.logger import get_logger
 
 
 # copied from inflection.camelize to eliminate a dependency
