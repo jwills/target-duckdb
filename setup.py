@@ -7,7 +7,7 @@ with open("README.md") as f:
 
 setup(
     name="target-duckdb",
-    version="0.4.1",
+    version="0.4.2",
     description="Singer.io target for loading data into DuckDB",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -19,7 +19,7 @@ setup(
     ],
     py_modules=["target_duckdb"],
     install_requires=[
-        "pipelinewise-singer-python==2.0.1",
+        "jsonschema>=3.2.0",
         "duckdb>=0.3.3",
     ],
     extras_require={
