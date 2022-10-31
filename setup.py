@@ -7,7 +7,7 @@ with open("README.md") as f:
 
 setup(
     name="target-duckdb",
-    version="0.4.2",
+    version="0.4.3",
     description="Singer.io target for loading data into DuckDB",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -34,6 +34,10 @@ setup(
           target-duckdb=target_duckdb:main
       """,
     packages=["target_duckdb"],
-    package_data={},
+    package_data={
+        "target_duckdb": [
+            "logging.conf"
+        ]
+    },
     include_package_data=True,
 )
