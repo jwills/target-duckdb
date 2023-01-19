@@ -87,6 +87,14 @@ def flatten_schema(d, parent_key=[], sep="__", level=0, max_level=0):
                 )
             else:
                 items.append((new_key, v))
+        elif "anyOf" in v.keys():
+            llv = v["anyOf"]
+            i, entry = 0, llv[0]
+            while entry["type"] == "null":
+                i += 1
+                entry = llv[i]
+            entry["type"] = ["null", entry["type"]]
+            items.append((new_key, entry))
         else:
             if len(v.values()) > 0:
                 if list(v.values())[0][0]["type"] == "string":
