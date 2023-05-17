@@ -13,7 +13,7 @@ def get_db_config():
     # --------------------------------------------------------------------------
     # DuckDB file path/schema
     config["filepath"] = "/tmp/integration_test.duckdb"
-    config["default_target_schema"] = "integration_test"
+    config["default_target_schema"] = "integration_test_schema"
 
     # --------------------------------------------------------------------------
     # The following variables needs to be empty.

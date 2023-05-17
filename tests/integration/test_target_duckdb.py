@@ -78,11 +78,8 @@ class TestIntegration(unittest.TestCase):
         Useful to check different loading methods without duplicating assertions
         """
         duckdb = DbSync(self.connection, self.config)
-        default_target_schema = self.config.get("default_target_schema", "")
-        schema_mapping = self.config.get("schema_mapping", {})
-
         # Identify target schema name
-        target_schema = "integration_test"
+        target_schema = "integration_test_schema"
 
         # Get loaded rows from tables
         table_one = duckdb.query(
@@ -865,7 +862,7 @@ class TestIntegration(unittest.TestCase):
         # ... and define a custom stream to schema mapping
         self.config["schema_mapping"] = {
             "tap_mysql_test": {
-                "target_schema": "integration_test",
+                "target_schema": "integration_test_schema",
                 "indices": {
                     "test_table_one": ["c_varchar"],
                     "test_table_two": ["c_varchar", "c_int"],
