@@ -1,9 +1,12 @@
-import json
 import collections.abc
-import re
-import uuid
 import itertools
+import json
+import os
+import re
 import time
+import uuid
+
+import duckdb
 
 from target_duckdb.logger import get_logger
 
@@ -215,6 +218,16 @@ class DbSync:
 
         # logger to be used across the class's methods
         self.logger = get_logger("target_duckdb")
+
+        # setup a catalog name
+        if duckdb.__version__ >= "0.7.0":
+            if self.connection_config.get("dbname"):
+                self.catalog_name = self.connection_config.get("dbname")
+            else:
+                filepath = self.connection_config.get("filepath")
+                self.catalog_name = os.path.splitext(os.path.basename(filepath))[0]
+        else:
+            self.catalog_name = None
         self.schema_name = None
 
         # Init stream schema
@@ -292,17 +305,22 @@ class DbSync:
         return ret
 
     def table_name(self, stream_name, is_temporary=False, without_schema=False):
+        if is_temporary:
+            return "tmp_{}".format(str(uuid.uuid4()).replace("-", "_"))
+
         stream_dict = stream_name_to_dict(stream_name)
         table_name = stream_dict["table_name"]
         pg_table_name = table_name.replace(".", "_").replace("-", "_").lower()
 
-        if is_temporary:
-            return "tmp_{}".format(str(uuid.uuid4()).replace("-", "_"))
-
         if without_schema:
-            return f'"{pg_table_name.lower()}"'
-
-        return f'{self.schema_name}."{pg_table_name.lower()}"'
+            if self.catalog_name is None:
+                return f'"{pg_table_name.lower()}"'
+            else:
+                return f'{self.catalog_name}."{pg_table_name.lower()}"'
+        elif self.catalog_name:
+            return f'{self.catalog_name}.{self.schema_name}."{pg_table_name.lower()}"'
+        else:
+            return f'{self.schema_name}."{pg_table_name.lower()}"'
 
     def record_primary_key_string(self, record):
         if len(self.stream_schema_message["key_properties"]) == 0:
