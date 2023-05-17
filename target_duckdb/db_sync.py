@@ -313,10 +313,7 @@ class DbSync:
         pg_table_name = table_name.replace(".", "_").replace("-", "_").lower()
 
         if without_schema:
-            if self.catalog_name is None:
-                return f'"{pg_table_name.lower()}"'
-            else:
-                return f'{self.catalog_name}."{pg_table_name.lower()}"'
+            return f'"{pg_table_name.lower()}"'
         elif self.catalog_name:
             return f'{self.catalog_name}.{self.schema_name}."{pg_table_name.lower()}"'
         else:
@@ -511,10 +508,16 @@ class DbSync:
             self.query(query)
 
     def get_tables(self):
-        return self.query(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
-            (self.schema_name,),
-        )
+        if self.catalog_name:
+            return self.query(
+                "SELECT table_name FROM information_schema.tables WHERE table_catalog = ? AND table_schema = ?",
+                (self.catalog_name, self.schema_name),
+            )
+        else:
+            return self.query(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = ?",
+                (self.schema_name,),
+            )
 
     def get_table_columns(self, table_name):
         return self.query(
@@ -548,7 +551,7 @@ class DbSync:
             != column_type(properties_schema).lower()
         ]
 
-        for (column_name, column) in columns_to_replace:
+        for column_name, column in columns_to_replace:
             self.version_column(column_name, stream)
             self.add_column(column, stream)
 
