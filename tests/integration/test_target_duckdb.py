@@ -2,6 +2,7 @@ import unittest
 import os
 import json
 import datetime
+import shutil
 import target_duckdb
 
 import pytest
@@ -1573,7 +1574,10 @@ class TestIntegration(unittest.TestCase):
         tap_lines = test_utils.get_test_tap_lines("messages-with-multiple-streams.json")
 
         # Setting custom temp_dir
-        self.config["temp_dir"] = "~/.pipelinewise/tmp"
+        if os.path.exists("/tmp/.pipelinewise-target-duckdb"):
+            shutil.rmtree("/tmp/.pipelinewise-target-duckdb")
+        os.mkdir("/tmp/.pipelinewise-target-duckdb")
+        self.config["temp_dir"] = "/tmp/.pipelinewise-target-duckdb"
         target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_multiple_streams_are_into_duckdb()

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
+import copy
 import io
 import json
-import os
 import sys
-import copy
+import tempfile
 from datetime import datetime
 from decimal import Decimal
-from tempfile import mkstemp
 
 import duckdb
 from jsonschema import Draft7Validator, FormatChecker
@@ -352,7 +351,7 @@ def flush_streams(
             row_count=row_count,
             db_sync=stream_to_sync[stream],
             delete_rows=config.get("hard_delete"),
-            temp_dir=config.get("temp_dir"),
+            temp_dir=config.get("temp_dir", tempfile.gettempdir()),
         )
 
     # reset flushed stream records to empty to avoid flushing same records
@@ -402,9 +401,9 @@ def load_stream_batch(
 
 
 # pylint: disable=unused-argument
-def flush_records(stream, records_to_load, row_count, db_sync, temp_dir=None):
+def flush_records(stream, records_to_load, row_count, db_sync, temp_dir):
     """Take a list of records and load into database"""
-    db_sync.load_rows(records_to_load.values(), row_count)
+    db_sync.load_rows(records_to_load.values(), row_count, temp_dir)
 
 
 def main():

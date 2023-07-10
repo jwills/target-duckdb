@@ -1,4 +1,5 @@
 import collections.abc
+import csv
 import itertools
 import json
 import os
@@ -350,7 +351,7 @@ class DbSync:
             for name in self.flatten_schema
         ]
 
-    def load_rows(self, records, count):
+    def load_rows(self, records, count, temp_dir):
         stream_schema_message = self.stream_schema_message
         stream = stream_schema_message["stream"]
         self.logger.info(
@@ -359,20 +360,23 @@ class DbSync:
 
         cur = self.conn
         temp_table = self.table_name(stream_schema_message["stream"], is_temporary=True)
+        temp_file_csv = os.path.join(temp_dir, f"{temp_table}.csv")
         cur.execute(self.create_table_query(table_name=temp_table, is_temporary=True))
 
-        insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
-            temp_table,
-            ", ".join(self.column_names()),
-            ", ".join(["?" for x in self.column_names()]),
-        )
-        self.logger.debug(insert_sql)
-        for record in records:
-            cur.execute(insert_sql, self.record_to_flattened(record))
+        # batch the records into a CSV file and do a copy operation
+        with open(temp_file_csv, "w") as f:
+            csvwriter = csv.writer(
+                f, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
+            )
+            for record in records:
+                csvwriter.writerow(self.record_to_flattened(record))
+        cur.execute("COPY {} FROM '{}'".format(temp_table, temp_file_csv))
 
         if len(self.stream_schema_message["key_properties"]) > 0:
             cur.execute(self.update_from_temp_table(temp_table))
         cur.execute(self.insert_from_temp_table(temp_table))
+        cur.execute(f"DROP TABLE {temp_table}")
+        os.unlink(temp_file_csv)
 
     # pylint: disable=duplicate-string-formatting-argument
     def insert_from_temp_table(self, temp_table):
@@ -450,8 +454,7 @@ class DbSync:
                 stream_schema_message["stream"], is_temporary=is_temporary
             )
 
-        return "CREATE {}TABLE IF NOT EXISTS {} ({})".format(
-            "TEMP " if is_temporary else "",
+        return "CREATE TABLE IF NOT EXISTS {} ({})".format(
             table_name if table_name else gen_table_name,
             ", ".join(columns + primary_key),
         )
