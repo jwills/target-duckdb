@@ -33,7 +33,7 @@ Running the target connector requires a `config.json` file. An example with the 
 
 ```json
 {
-    "filepath": "/path/to/local/duckdb.file",
+    "path": "/path/to/local/file.duckdb",
     "default_target_schema": "main"
 }
 ```
@@ -42,7 +42,11 @@ Additional options in `config.json`:
 
 | Property                            | Type    | Required?  | Description                                                   |
 |-------------------------------------|---------|------------|---------------------------------------------------------------|
-| filepath                            | String  | Yes        | The path to the DuckDB file that you want to write on the local filesystem. |	
+| path (alias: filepath)              | String  | Yes        | The path to use for the `duckdb.connect` call; either a local file or a MotherDuck connection uri. |
+| dbname (alias: database)            | String  |            | The database name to write to; this will be inferred from the path property if it is not specified. |
+| token                               | String  |            | For MotherDuck connections, the auth token to use (this may also be set directly via the MOTHERDUCK_TOKEN environment variable. |
+| delimiter                           | String  |            | (Default: ',') The delimiter to use for the CSV files that are used for record imports. |
+| quotechar                           | String  |            | (Default: '"') The quote character to use for the CSV files that are used for record imports. |
 | batch_size_rows                     | Integer |            | (Default: 100000) Maximum number of rows in each batch. At the end of each batch, the rows in the batch are loaded into DuckDB. |
 | flush_all_streams                   | Boolean |            | (Default: False) Flush and load every stream into DuckDB when one batch is full. Warning: This may trigger the COPY command to use files with low number of records. |
 | default_target_schema               | String  |            | Name of the schema where the tables will be created. If `schema_mapping` is not defined then every stream sent by the tap is loaded into this schema.    |

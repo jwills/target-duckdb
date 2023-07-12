@@ -12,7 +12,7 @@ def get_db_config():
     # valid details to a local DuckDB file
     # --------------------------------------------------------------------------
     # DuckDB file path/schema
-    config["filepath"] = "/tmp/integration_test.duckdb"
+    config["path"] = "md:target_duckdb"
     config["default_target_schema"] = "integration_test_schema"
 
     # --------------------------------------------------------------------------

@@ -7,11 +7,11 @@ with open("README.md") as f:
 
 setup(
     name="target-duckdb",
-    version="0.5.0",
+    version="0.6.0",
     description="Singer.io target for loading data into DuckDB",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="TransferWise",
+    author="Josh Wills",
     url="https://github.com/jwills/target-duckdb",
     classifiers=[
         "License :: OSI Approved :: Apache Software License",
@@ -20,7 +20,7 @@ setup(
     py_modules=["target_duckdb"],
     install_requires=[
         "jsonschema>=3.2.0",
-        "duckdb>=0.3.3",
+        "duckdb>=0.7.0",
     ],
     extras_require={
         "test": [

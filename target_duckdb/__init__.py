@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
+import copy
 import io
 import json
-import os
 import sys
-import copy
+import tempfile
 from datetime import datetime
 from decimal import Decimal
-from tempfile import mkstemp
 
 import duckdb
 from jsonschema import Draft7Validator, FormatChecker
@@ -90,14 +89,10 @@ def emit_state(state):
 # pylint: disable=missing-function-docstring,missing-class-docstring
 def validate_config(config):
     errors = []
-    required_config_keys = [
-        "filepath",
-    ]
 
-    # Check if mandatory keys exist
-    for k in required_config_keys:
-        if not config.get(k, None):
-            errors.append("Required key is missing from config: [{}]".format(k))
+    # Check that either 'path' or 'filepath' is defined in the config
+    if not config.get("path", config.get("filepath")):
+        errors.append("Either 'path' or 'filepath' must be defined in config.")
 
     # Check target schema config
     config_default_target_schema = config.get("default_target_schema", None)
@@ -119,8 +114,15 @@ def duckdb_connect(config):
         LOGGER.error("Invalid configuration:\n   * %s", "\n   * ".join(config_errors))
         sys.exit(1)
 
-    # TODO(jwills): make this richer-- threads, pre-load extensions, etc.
-    return duckdb.connect(config["filepath"])
+    path = config.get("path", config.get("filepath"))
+    token = config.get("token", None)
+    if token:
+        path = f"{path}?token={token}"
+    db = duckdb.connect(path)
+    settings = config.get("settings", {})
+    for setting, value in settings.items():
+        db.execute(f"SET {setting} = '{value}'")
+    return db
 
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,invalid-name,consider-iterating-dictionary
@@ -352,7 +354,7 @@ def flush_streams(
             row_count=row_count,
             db_sync=stream_to_sync[stream],
             delete_rows=config.get("hard_delete"),
-            temp_dir=config.get("temp_dir"),
+            temp_dir=config.get("temp_dir", tempfile.gettempdir()),
         )
 
     # reset flushed stream records to empty to avoid flushing same records
@@ -402,9 +404,9 @@ def load_stream_batch(
 
 
 # pylint: disable=unused-argument
-def flush_records(stream, records_to_load, row_count, db_sync, temp_dir=None):
+def flush_records(stream, records_to_load, row_count, db_sync, temp_dir):
     """Take a list of records and load into database"""
-    db_sync.load_rows(records_to_load.values(), row_count)
+    db_sync.load_rows(records_to_load.values(), row_count, temp_dir)
 
 
 def main():

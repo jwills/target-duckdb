@@ -1,12 +1,12 @@
 import collections.abc
+import csv
 import itertools
 import json
 import os
 import re
 import time
 import uuid
-
-import duckdb
+from urllib.parse import urlparse
 
 from target_duckdb.logger import get_logger
 
@@ -191,6 +191,16 @@ def stream_name_to_dict(stream_name, separator="-"):
     }
 
 
+def get_catalog_name(connection_config):
+    raw_path = connection_config.get("path", connection_config.get("filepath"))
+    parsed = urlparse(raw_path)
+    base_file = os.path.basename(parsed.path)
+    path_db = os.path.splitext(base_file)[0]
+    if parsed.scheme in {"md", "motherduck"} and path_db == "":
+        path_db = "my_db"
+    return path_db
+
+
 # pylint: disable=too-many-public-methods,too-many-instance-attributes
 class DbSync:
     def __init__(self, connection, connection_config, stream_schema_message=None):
@@ -220,14 +230,12 @@ class DbSync:
         self.logger = get_logger("target_duckdb")
 
         # setup a catalog name
-        if duckdb.__version__ >= "0.7.0":
-            if self.connection_config.get("dbname"):
-                self.catalog_name = self.connection_config.get("dbname")
-            else:
-                filepath = self.connection_config.get("filepath")
-                self.catalog_name = os.path.splitext(os.path.basename(filepath))[0]
+        if self.connection_config.get("database"):
+            self.catalog_name = self.connection_config.get("database")
+        elif self.connection_config.get("dbname"):
+            self.catalog_name = self.connection_config.get("dbname")
         else:
-            self.catalog_name = None
+            self.catalog_name = get_catalog_name(self.connection_config)
         self.schema_name = None
 
         # Init stream schema
@@ -290,6 +298,10 @@ class DbSync:
                 max_level=self.data_flattening_max_level,
             )
 
+            # Delimiters/quotechars for CSV temp files
+            self.delimiter = self.connection_config.get("delimiter", ",")
+            self.quotechar = self.connection_config.get("quotechar", '"')
+
     def query(self, query, params=None):
         self.logger.debug("Running query: %s", query)
         cur = self.conn
@@ -350,7 +362,7 @@ class DbSync:
             for name in self.flatten_schema
         ]
 
-    def load_rows(self, records, count):
+    def load_rows(self, records, count, temp_dir):
         stream_schema_message = self.stream_schema_message
         stream = stream_schema_message["stream"]
         self.logger.info(
@@ -359,20 +371,26 @@ class DbSync:
 
         cur = self.conn
         temp_table = self.table_name(stream_schema_message["stream"], is_temporary=True)
+        temp_file_csv = os.path.join(temp_dir, f"{temp_table}.csv")
         cur.execute(self.create_table_query(table_name=temp_table, is_temporary=True))
 
-        insert_sql = "INSERT INTO {} ({}) VALUES ({})".format(
-            temp_table,
-            ", ".join(self.column_names()),
-            ", ".join(["?" for x in self.column_names()]),
-        )
-        self.logger.debug(insert_sql)
-        for record in records:
-            cur.execute(insert_sql, self.record_to_flattened(record))
+        # batch the records into a CSV file and do a copy operation
+        with open(temp_file_csv, "w") as f:
+            csvwriter = csv.writer(
+                f,
+                delimiter=self.delimiter,
+                quotechar=self.quotechar,
+                quoting=csv.QUOTE_MINIMAL,
+            )
+            for record in records:
+                csvwriter.writerow(self.record_to_flattened(record))
+        cur.execute("COPY {} FROM '{}'".format(temp_table, temp_file_csv))
 
         if len(self.stream_schema_message["key_properties"]) > 0:
             cur.execute(self.update_from_temp_table(temp_table))
         cur.execute(self.insert_from_temp_table(temp_table))
+        cur.execute(f"DROP TABLE {temp_table}")
+        os.unlink(temp_file_csv)
 
     # pylint: disable=duplicate-string-formatting-argument
     def insert_from_temp_table(self, temp_table):
@@ -404,13 +422,13 @@ class DbSync:
         columns = [x for x in self.column_names() if x not in primary_key_columns]
         table = self.table_name(stream_schema_message["stream"])
 
-        return """UPDATE {} SET {} FROM {} s
+        return """UPDATE {} as s SET {} FROM {} t
         WHERE {}
         """.format(
             table,
-            ", ".join(["{}=s.{}".format(c, c) for c in columns]),
+            ", ".join(["{}=t.{}".format(c, c) for c in columns]),
             temp_table,
-            self.primary_key_condition(table),
+            self.primary_key_condition("t"),
         )
 
     def primary_key_condition(self, right_table):
@@ -450,8 +468,7 @@ class DbSync:
                 stream_schema_message["stream"], is_temporary=is_temporary
             )
 
-        return "CREATE {}TABLE IF NOT EXISTS {} ({})".format(
-            "TEMP " if is_temporary else "",
+        return "CREATE TABLE IF NOT EXISTS {} ({})".format(
             table_name if table_name else gen_table_name,
             ", ".join(columns + primary_key),
         )
