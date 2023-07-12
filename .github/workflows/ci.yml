@@ -32,4 +32,5 @@ jobs:
       - name: Integration Tests
         env:
           LOGGING_CONF_FILE: ./sample_logging.conf
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: make integration_test

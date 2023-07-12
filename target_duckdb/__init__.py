@@ -89,14 +89,10 @@ def emit_state(state):
 # pylint: disable=missing-function-docstring,missing-class-docstring
 def validate_config(config):
     errors = []
-    required_config_keys = [
-        "filepath",
-    ]
 
-    # Check if mandatory keys exist
-    for k in required_config_keys:
-        if not config.get(k, None):
-            errors.append("Required key is missing from config: [{}]".format(k))
+    # Check that either 'path' or 'filepath' is defined in the config
+    if not config.get("path", config.get("filepath")):
+        errors.append("Either 'path' or 'filepath' must be defined in config.")
 
     # Check target schema config
     config_default_target_schema = config.get("default_target_schema", None)
@@ -118,8 +114,15 @@ def duckdb_connect(config):
         LOGGER.error("Invalid configuration:\n   * %s", "\n   * ".join(config_errors))
         sys.exit(1)
 
-    # TODO(jwills): make this richer-- threads, pre-load extensions, etc.
-    return duckdb.connect(config["filepath"])
+    path = config.get("path", config.get("filepath"))
+    token = config.get("token", None)
+    if token:
+        path = f"{path}?token={token}"
+    db = duckdb.connect(path)
+    settings = config.get("settings", {})
+    for setting, value in settings.items():
+        db.execute(f"SET {setting} = '{value}'")
+    return db
 
 
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements,invalid-name,consider-iterating-dictionary
