@@ -503,6 +503,7 @@ class DbSync:
 
     def create_schema_if_not_exists(self, table_columns_cache=None):
         schema_name = self.schema_name
+        catalog_name = self.catalog_name
         schema_rows = 0
 
         # table_columns_cache is an optional pre-collected list of available objects in DuckDB
@@ -511,6 +512,16 @@ class DbSync:
                 filter(lambda x: x["TABLE_SCHEMA"] == schema_name, table_columns_cache)
             )
         # Query realtime if not pre-collected
+        elif catalog_name:
+            schema_rows = self.query(
+                "SELECT LOWER(schema_name) schema_name, LOWER(catalog_name) catalog_name "
+                "FROM information_schema.schemata "
+                "WHERE LOWER(schema_name) = ? AND LOWER(catalog_name) = ?",
+                (
+                    schema_name.lower(),
+                    catalog_name.lower(),
+                ),
+            )
         else:
             schema_rows = self.query(
                 "SELECT LOWER(schema_name) schema_name FROM information_schema.schemata WHERE LOWER(schema_name) = ?",
@@ -518,7 +529,11 @@ class DbSync:
             )
 
         if len(schema_rows) == 0:
-            query = "CREATE SCHEMA IF NOT EXISTS {}".format(schema_name)
+            if catalog_name:
+                query = f"CREATE SCHEMA IF NOT EXISTS {catalog_name}.{schema_name}"
+            else:
+                query = f"CREATE SCHEMA IF NOT EXISTS {schema_name}"
+
             self.logger.info(
                 "Schema '%s' does not exist. Creating... %s", schema_name, query
             )
