@@ -1581,3 +1581,39 @@ class TestIntegration(unittest.TestCase):
         target_duckdb.persist_lines(self.connection, self.config, tap_lines)
 
         self.assert_multiple_streams_are_into_duckdb()
+
+
+class TestIntegrationLocal:
+    @pytest.fixture
+    def database_dir(self, tmp_path):
+        """Create a temporary directory for the databases."""
+        databases = tmp_path / "databases"
+        databases.mkdir()
+        return databases
+
+    @pytest.fixture
+    def config(self, database_dir):
+        """Create a temporary directory for the databases."""
+        return {
+            "path": str(database_dir.joinpath("warehouse.db")),
+            "default_target_schema": "test",
+        }
+
+    def _assert_table_in_catalog_schema(self, db, catalog_name, schema_name):
+        db.catalog_name = catalog_name
+        db.create_schema_if_not_exists()
+        db.query(f"CREATE TABLE {catalog_name}.{schema_name}.test_table (id INTEGER);")
+        assert db.get_tables()
+
+    def test_create_schema_in_catalog(self, database_dir, config):
+        connection = target_duckdb.duckdb_connect(config)
+        with connection.cursor() as cur:
+            cur.query(
+                f"ATTACH '{database_dir}/db1.db';"
+                f"ATTACH '{database_dir}/db2.db';"
+            )
+        db = DbSync(connection, config)
+        db.schema_name = "test_schema"
+
+        self._assert_table_in_catalog_schema(db, "db1", "test_schema")
+        self._assert_table_in_catalog_schema(db, "db2", "test_schema")
