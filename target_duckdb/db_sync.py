@@ -530,9 +530,9 @@ class DbSync:
 
         if len(schema_rows) == 0:
             if catalog_name:
-                query = f"CREATE SCHEMA IF NOT EXISTS {catalog_name}.{schema_name}"
+                query = f'CREATE SCHEMA IF NOT EXISTS "{catalog_name}"."{schema_name}"'
             else:
-                query = f"CREATE SCHEMA IF NOT EXISTS {schema_name}"
+                query = f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'
 
             self.logger.info(
                 "Schema '%s' does not exist. Creating... %s", schema_name, query
