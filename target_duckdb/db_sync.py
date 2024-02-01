@@ -327,9 +327,9 @@ class DbSync:
         if without_schema:
             return f'"{pg_table_name.lower()}"'
         elif self.catalog_name:
-            return f'{self.catalog_name}.{self.schema_name}."{pg_table_name.lower()}"'
+            return f'"{self.catalog_name}"."{self.schema_name}"."{pg_table_name.lower()}"'
         else:
-            return f'{self.schema_name}."{pg_table_name.lower()}"'
+            return f'"{self.schema_name}"."{pg_table_name.lower()}"'
 
     def record_primary_key_string(self, record):
         if len(self.stream_schema_message["key_properties"]) == 0:
