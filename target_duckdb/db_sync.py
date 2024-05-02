@@ -422,6 +422,10 @@ class DbSync:
         columns = [x for x in self.column_names() if x not in primary_key_columns]
         table = self.table_name(stream_schema_message["stream"])
 
+        if not columns:
+            # Nothing to do if all of the columns are PKs
+            return
+
         return """UPDATE {} as s SET {} FROM {} t
         WHERE {}
         """.format(
