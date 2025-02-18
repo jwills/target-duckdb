@@ -32,6 +32,8 @@ def column_type(schema_property):
         col_type = "timestamp"
     elif property_format == "time":
         col_type = "time"
+    elif property_format == "date":
+        col_type = "date"
     elif "number" in property_type:
         col_type = "double"
     elif "integer" in property_type and "string" in property_type:

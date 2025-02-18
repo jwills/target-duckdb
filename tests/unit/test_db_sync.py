@@ -53,6 +53,7 @@ class TestUnit(unittest.TestCase):
         json_dt = {"type": ["string"], "format": "date-time"}
         json_dt_or_null = {"type": ["string", "null"], "format": "date-time"}
         json_t = {"type": ["string"], "format": "time"}
+        json_d = {"type": ["string"], "format": "date"}
         json_t_or_null = {"type": ["string", "null"], "format": "time"}
         json_num = {"type": ["number"]}
         json_smallint = {"type": ["integer"], "maximum": 32767, "minimum": -32768}
@@ -74,6 +75,7 @@ class TestUnit(unittest.TestCase):
         self.assertEqual(mapper(json_dt), "timestamp")
         self.assertEqual(mapper(json_dt_or_null), "timestamp")
         self.assertEqual(mapper(json_t), "time")
+        self.assertEqual(mapper(json_d), "date")
         self.assertEqual(mapper(json_t_or_null), "time")
         self.assertEqual(mapper(json_num), "double")
         self.assertEqual(mapper(json_smallint), "smallint")
