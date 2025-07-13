@@ -382,11 +382,12 @@ class DbSync:
                 f,
                 delimiter=self.delimiter,
                 quotechar=self.quotechar,
-                quoting=csv.QUOTE_MINIMAL,
+                quoting=csv.QUOTE_NONNUMERIC,
+                escapechar='"',
             )
             for record in records:
                 csvwriter.writerow(self.record_to_flattened(record))
-        cur.execute("COPY {} FROM '{}' WITH (new_line '\\r\\n')".format(temp_table, temp_file_csv))
+        cur.execute("COPY {} FROM '{}' WITH (new_line '\\r\\n', escape '\"')".format(temp_table, temp_file_csv))
 
         if len(self.stream_schema_message["key_properties"]) > 0:
             cur.execute(self.update_from_temp_table(temp_table))
