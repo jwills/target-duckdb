@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "target-duckdb"
+version = "0.8.1"
+description = "Singer.io target for loading data into DuckDB"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [
+    { name = "Josh Wills" }
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "jsonschema>=3.2.0",
+    "duckdb>=1.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pylint",
+    "pytest-cov",
+]
+
+[project.scripts]
+target-duckdb = "target_duckdb:main"
+
+[project.urls]
+Homepage = "https://github.com/jwills/target-duckdb"
+Repository = "https://github.com/jwills/target-duckdb"
+
+[tool.hatch.build.targets.wheel]
+packages = ["target_duckdb"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "target_duckdb/**",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pylint.main]
+jobs = 1
+extension-pkg-allow-list = ["ujson"]
+
+[tool.pylint."messages control"]
+disable = [
+    "wrong-import-order",
+    "broad-except",
+    "broad-exception-raised",
+    "missing-module-docstring",
+    "missing-function-docstring",
+    "missing-class-docstring",
+    "consider-using-f-string",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-instance-attributes",
+    "no-else-return",
+    "inconsistent-return-statements",
+    "unnecessary-lambda-assignment",
+    "unspecified-encoding",
+    "possibly-used-before-assignment",
+]
+
+[tool.pylint.reports]
+output-format = "parseable"
+reports = false
+
+[tool.pylint.format]
+max-line-length = 120

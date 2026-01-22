@@ -11,6 +11,30 @@ from urllib.parse import urlparse
 from target_duckdb.logger import get_logger
 
 
+def normalize_value_for_csv(value):
+    """Normalize values for DuckDB COPY compatibility.
+
+    DuckDB's CSV parser fails to insert ISO 8601 timestamps with timezone
+    indicators into TIMESTAMP columns (without timezone). This function
+    removes timezone suffixes to ensure proper parsing.
+
+    Handles:
+    - 'Z' suffix (UTC indicator)
+    - '+HH:MM' or '-HH:MM' timezone offsets
+    - Malformed duplicated offsets like '+00:00+00:00'
+    """
+    if not isinstance(value, str):
+        return value
+    # Handle Z suffix
+    if value.endswith("Z"):
+        return value[:-1]
+    # Handle timezone offsets like +00:00 or -05:30
+    # Keep stripping offsets until none remain (handles duplicates)
+    while len(value) >= 6 and value[-6] in "+-" and value[-3] == ":":
+        value = value[:-6]
+    return value
+
+
 # copied from inflection.camelize to eliminate a dependency
 def camelize(string: str, uppercase_first_letter: bool = True) -> str:
     if uppercase_first_letter:
@@ -358,7 +382,7 @@ class DbSync:
         )
 
         return [
-            flatten[name]
+            normalize_value_for_csv(flatten[name])
             if name in flatten and (flatten[name] == 0 or flatten[name])
             else None
             for name in self.flatten_schema
@@ -386,7 +410,7 @@ class DbSync:
             )
             for record in records:
                 csvwriter.writerow(self.record_to_flattened(record))
-        cur.execute("COPY {} FROM '{}' WITH (new_line '\\r\\n')".format(temp_table, temp_file_csv))
+        cur.execute("COPY {} FROM '{}' WITH (header false, new_line '\\r\\n')".format(temp_table, temp_file_csv))
 
         if len(self.stream_schema_message["key_properties"]) > 0:
             cur.execute(self.update_from_temp_table(temp_table))

@@ -56,7 +56,8 @@ def add_metadata_columns_to_schema(schema_message):
         "format": "date-time",
     }
     extended_schema_message["schema"]["properties"]["_sdc_deleted_at"] = {
-        "type": ["null", "string"]
+        "type": ["null", "string"],
+        "format": "date-time",
     }
 
     return extended_schema_message

@@ -8,11 +8,12 @@ def get_db_config():
     # --------------------------------------------------------------------------
     # Default configuration settings for integration tests.
     # --------------------------------------------------------------------------
-    # The following values needs to be defined in environment variables with
-    # valid details to a local DuckDB file
+    # Use MotherDuck if MOTHERDUCK_TOKEN is set, otherwise use local DuckDB file
     # --------------------------------------------------------------------------
-    # DuckDB file path/schema
-    config["path"] = "md:target_duckdb"
+    if os.environ.get("MOTHERDUCK_TOKEN"):
+        config["path"] = "md:target_duckdb"
+    else:
+        config["path"] = "/tmp/target_duckdb_test.db"
     config["default_target_schema"] = "integration_test_schema"
 
     # --------------------------------------------------------------------------

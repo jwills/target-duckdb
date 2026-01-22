@@ -1,18 +1,18 @@
+.PHONY: venv pylint unit_test integration_test test clean
+
 venv:
-	python3 -m venv venv ;\
-	. ./venv/bin/activate ;\
-	pip install --upgrade pip setuptools wheel ;\
-	pip install -e .[test]
+	uv sync --extra test
 
 pylint:
-	. ./venv/bin/activate ;\
-	pylint --rcfile .pylintrc target_duckdb/
+	uv run pylint target_duckdb/
 
 unit_test:
-	. ./venv/bin/activate ;\
-	pytest tests/unit -v
+	uv run pytest tests/unit -v
 
 integration_test:
-	. ./venv/bin/activate ;\
-	pytest tests/integration -v
+	uv run pytest tests/integration -v
 
+test: unit_test integration_test
+
+clean:
+	rm -rf .venv dist *.egg-info .pytest_cache .coverage
