@@ -16,6 +16,8 @@ try:
 except ImportError:
     import utils as test_utils
 
+from target_duckdb.db_sync import get_catalog_name
+
 METADATA_COLUMNS = ["_sdc_extracted_at", "_sdc_batched_at", "_sdc_deleted_at"]
 
 
@@ -32,15 +34,26 @@ class TestIntegration(unittest.TestCase):
         cls.connection = target_duckdb.duckdb_connect(cls.config)
         duckdb = DbSync(cls.connection, cls.config)
         if cls.config["default_target_schema"]:
+            catalog_name = get_catalog_name(cls.config)
+            schema_name = cls.config["default_target_schema"]
+            if catalog_name:
+                qualified_schema = f'"{catalog_name}"."{schema_name}"'
+            else:
+                qualified_schema = f'"{schema_name}"'
             duckdb.query(
-                "DROP SCHEMA IF EXISTS {} CASCADE".format(
-                    cls.config["default_target_schema"]
-                )
+                "DROP SCHEMA IF EXISTS {} CASCADE".format(qualified_schema)
             )
 
     @classmethod
     def tearDownClass(cls) -> None:
         cls.connection.close()
+
+    def get_qualified_schema(self, schema_name):
+        """Get the fully qualified schema name (catalog.schema or just schema)"""
+        catalog_name = get_catalog_name(self.config)
+        if catalog_name:
+            return f'"{catalog_name}"."{schema_name}"'
+        return f'"{schema_name}"'
 
     @staticmethod
     def remove_metadata_columns_from_rows(rows):
@@ -80,20 +93,20 @@ class TestIntegration(unittest.TestCase):
         """
         duckdb = DbSync(self.connection, self.config)
         # Identify target schema name
-        target_schema = "integration_test_schema"
+        target_schema = self.get_qualified_schema("integration_test_schema")
 
         # Get loaded rows from tables
         table_one = duckdb.query(
-            "SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_one\" ORDER BY c_pk".format(target_schema)
         )
         table_two = duckdb.query(
-            "SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_two\" ORDER BY c_pk".format(target_schema)
         )
         table_three = duckdb.query(
-            "SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_three\" ORDER BY c_pk".format(target_schema)
         )
         table_four = duckdb.query(
-            "SELECT * FROM {}.test_table_four ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_four\" ORDER BY c_pk".format(target_schema)
         )
 
         # ----------------------------------------------------------------------
@@ -250,18 +263,18 @@ class TestIntegration(unittest.TestCase):
     def assert_logical_streams_are_in_duckdb(self, should_metadata_columns_exist=False):
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_one = duckdb.query(
-            "SELECT * FROM {}.logical1_table1 ORDER BY cid".format(target_schema)
+            "SELECT * FROM {}.\"logical1_table1\" ORDER BY cid".format(target_schema)
         )
         table_two = duckdb.query(
-            "SELECT * FROM {}.logical1_table2 ORDER BY cid".format(target_schema)
+            "SELECT * FROM {}.\"logical1_table2\" ORDER BY cid".format(target_schema)
         )
         table_three = duckdb.query(
-            "SELECT * FROM {}.logical2_table1 ORDER BY cid".format(target_schema)
+            "SELECT * FROM {}.\"logical2_table1\" ORDER BY cid".format(target_schema)
         )
         table_four = duckdb.query(
-            "SELECT cid, ctimentz, ctimetz FROM {}.logical1_edgydata WHERE CID IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(
+            "SELECT cid, ctimentz, ctimetz FROM {}.\"logical1_edgydata\" WHERE CID IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(
                 target_schema
             )
         )
@@ -352,18 +365,18 @@ class TestIntegration(unittest.TestCase):
     def assert_logical_streams_are_in_duckdb_and_are_empty(self):
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_one = duckdb.query(
-            "SELECT * FROM {}.logical1_table1 ORDER BY CID".format(target_schema)
+            "SELECT * FROM {}.\"logical1_table1\" ORDER BY CID".format(target_schema)
         )
         table_two = duckdb.query(
-            "SELECT * FROM {}.logical1_table2 ORDER BY CID".format(target_schema)
+            "SELECT * FROM {}.\"logical1_table2\" ORDER BY CID".format(target_schema)
         )
         table_three = duckdb.query(
-            "SELECT * FROM {}.logical2_table1 ORDER BY CID".format(target_schema)
+            "SELECT * FROM {}.\"logical2_table1\" ORDER BY CID".format(target_schema)
         )
         table_four = duckdb.query(
-            "SELECT * FROM {}.logical1_edgydata WHERE cid IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(
+            "SELECT * FROM {}.\"logical1_edgydata\" WHERE cid IN(1,2,3,4,5,6,8,9) ORDER BY cid".format(
                 target_schema
             )
         )
@@ -379,7 +392,7 @@ class TestIntegration(unittest.TestCase):
         # Redshift doesn't have binary type. Binary formatted singer values loaded into VARCHAR columns
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_one = duckdb.query(
             'SELECT * FROM {}.{} ORDER BY "new"'.format(target_schema, table_name)
         )
@@ -514,9 +527,9 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_unicode = duckdb.query(
-            "SELECT * FROM {}.test_table_unicode ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_unicode\" ORDER BY c_pk".format(target_schema)
         )
 
         self.assertEqual(
@@ -564,9 +577,9 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_long_texts = duckdb.query(
-            "SELECT * FROM {}.test_table_long_texts ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_long_texts\" ORDER BY c_pk".format(target_schema)
         )
 
         # Test not very long texts by exact match
@@ -624,9 +637,9 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         table_non_db_friendly_columns = duckdb.query(
-            "SELECT * FROM {}.test_table_non_db_friendly_columns ORDER BY c_pk".format(
+            "SELECT * FROM {}.\"test_table_non_db_friendly_columns\" ORDER BY c_pk".format(
                 target_schema
             )
         )
@@ -671,9 +684,9 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables - Transform JSON to string at query time
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         unflattened_table = duckdb.query(
-            """SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk""".format(
+            """SELECT * FROM {}.\"test_table_nested_schema\" ORDER BY c_pk""".format(
                 target_schema
             )
         )
@@ -713,9 +726,9 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(self.config.get("default_target_schema", ""))
         flattened_table = duckdb.query(
-            "SELECT * FROM {}.test_table_nested_schema ORDER BY c_pk".format(
+            "SELECT * FROM {}.\"test_table_nested_schema\" ORDER BY c_pk".format(
                 target_schema
             )
         )
@@ -757,15 +770,16 @@ class TestIntegration(unittest.TestCase):
 
         # Get loaded rows from tables
         duckdb = DbSync(self.connection, self.config)
-        target_schema = self.config.get("default_target_schema", "")
+        schema_name = self.config.get("default_target_schema", "")
+        target_schema = self.get_qualified_schema(schema_name)
         table_one = duckdb.query(
-            "SELECT * FROM {}.test_table_one ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_one\" ORDER BY c_pk".format(target_schema)
         )
         table_two = duckdb.query(
-            "SELECT * FROM {}.test_table_two ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_two\" ORDER BY c_pk".format(target_schema)
         )
         table_three = duckdb.query(
-            "SELECT * FROM {}.test_table_three ORDER BY c_pk".format(target_schema)
+            "SELECT * FROM {}.\"test_table_three\" ORDER BY c_pk".format(target_schema)
         )
 
         # Get the previous column name from information schema in test_table_two
@@ -777,7 +791,7 @@ class TestIntegration(unittest.TestCase):
                AND table_name = 'test_table_two'
                AND ordinal_position = 1
             """.format(
-                target_schema.lower()
+                schema_name.lower()
             )
         )[0]["column_name"]
 
